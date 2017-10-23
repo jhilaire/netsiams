@@ -162,7 +162,7 @@ tmp3 <- data_ampere %>%
 ggplot(tmp3) +
   geom_bar(aes(x=period, y=value, fill=technology), stat="identity") +
   facet_grid(target~model, scales="free_y") +
-  scale_y_log10() +
+  #scale_y_log10() +
   theme_bw()
 
 ggplot(tmp3 %>% 
@@ -187,3 +187,6 @@ ggplot(tmp3 %>% group_by(model,target,technology) %>% summarise(value=sum(value)
   geom_bar(aes(x=target, y=value, fill=technology), stat="identity") +
   facet_wrap(~model, scales="free_y") +
   theme_bw()
+
+
+#== Cumulative emissions, short-term emissions ...

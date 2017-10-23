@@ -6,3 +6,4 @@ conceptualStructure(v_data_wos)
 conceptualStructure(v_data_scopus)
 
 
+scientometrics(v_data_wos)
