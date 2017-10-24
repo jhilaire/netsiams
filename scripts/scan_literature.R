@@ -1,5 +1,8 @@
 library(tidyverse)
 library(pdftools)
+library(stringr)
+
+source()
 
 extract_title <- function(i_pdf) {
   
@@ -54,39 +57,29 @@ search_doi_in_text <- function(i_pdf) {
   
   txt  <- pdftools::pdf_text(paste(i_pdf))
   
-  txt_doi <- strsplit(txt,"\r\n")[[1]][grep("doi", strsplit(tolower(txt),"\r\n")[[1]])]
-  
-  if (length(txt_doi) != 0) {
-    # pos_doi   <- gregexpr("doi", tolower(txt_doi))[[1]][1]
-    # pos_space <- gregexpr("\\s", txt_doi)[[1]]
-    # 
-    # id_space <- which(abs(pos_space - pos_doi) == min (abs(pos_space - pos_doi)))
-    # 
-    # if (pos_space[id_space] < pos_doi) id_space <- id_space + 1
-    # 
-    # if (length(test) != 0) {
-    #   doi = substr(txt_doi, pos_doi, pos_space[id_space])
-    # }
-    if (length(txt_doi) > 1) txt_doi <- txt_doi[length(txt_doi)]
-    doi = txt_doi
-  } else {
-    cat("warning: doi could not be found in this document\n")
+  doipat <- "[dD][oO][iI](?!ng) {0,1}:{0,1} {0,1}(\\S*)"
+
+  p <- strsplit(txt,"\r\n")[[1]]
+  txt_doi <- str_match(paste0(p,collapse=" ;"),doipat)[,2]
+  if (is_empty(txt_doi)) {
+    p <- strsplit(txt,"\r\n")[[2]]
+    txt_doi <- str_match(paste0(p,collapse=" ;"),doipat)[,2]
   }
   
+  if (is.na(txt_doi)) cat("warning: doi could not be found in this document\n")
   
-  
-  return(doi)
+  return(txt_doi)
   
 }
 
-dirname_iam <- "IAM literature"
+dirname_iam <- "Selected literature/"
 
 #urls <- data.frame(url=list.files("C:/Users/hilj/ownCloud/IAM Special Issues/", recursive = TRUE))
-urls <- data.frame(url=list.files(paste0("C:/Users/hilj/ownCloud/", dirname_iam, "/"), recursive = TRUE))
+urls <- data.frame(url=list.files(paste0("../", dirname_iam, "/"), recursive = TRUE))
 
 get_prism_doi <- function(i_pdf) {
   
-  doi = ""
+  doi = NA
   
   tmp <- pdf_info(i_pdf)$metadata
   start = regexpr("<prism:doi>", tmp)
@@ -95,6 +88,7 @@ get_prism_doi <- function(i_pdf) {
   if (!length(start)==0 && !length(end) == 0) {
     doi = substr(tmp,start+11,end-1)
   }
+  if (nchar(doi) < 5) doi <- NA
   
   return(doi)
   
@@ -104,9 +98,9 @@ df <- urls %>%
   separate(url, into=c("MIP", "filename"), "/", drop=FALSE, remove=FALSE) %>% 
   mutate(AU=sapply(filename, function(x) trimws(substr(x, 1, nchar(x)-9)))) %>% 
   mutate(PY=sapply(filename, function(x) substr(trimws(substr(x, nchar(x)-8, nchar(x)-4)),1,4))) %>%
-  mutate(doi1 = sapply(file.path("C:/Users/hilj/ownCloud/", dirname_iam, url), get_prism_doi)) %>% 
-  mutate(doi2 = sapply(file.path("C:/Users/hilj/ownCloud/", dirname_iam, url), search_doi_in_text)) %>% 
-  mutate(fullpath=file.path("C:/Users/hilj/ownCloud/", dirname_iam, url)) %>% 
+  mutate(doi1 = sapply(file.path("../", dirname_iam, url), get_prism_doi)) %>% 
+  mutate(doi2 = sapply(file.path("../", dirname_iam, url), search_doi_in_text)) %>% 
+  mutate(fullpath=file.path("../", dirname_iam, url)) %>% 
   mutate(TI=sapply(fullpath, extract_title)) %>% 
   data.frame()
 
@@ -165,33 +159,34 @@ all$TI[which(all$filename == "Tavoni et al 2017.pdf")] <- "Challenges and opport
 all$TI[which(all$filename == "Vaughan 2016.pdf")] <- "Expert assessment concludes negative emissions scenarios may not deliver" 
 all$TI[which(all$filename == "Wise et al 2009.pdf")] <- "Implications of Limiting CO2 Concentrations for Land Use and Energy" 
 
-all$doi3 <- sapply(all$doi2, function(x) {
-  
-  doi = ""
-  
-  x = trimws(x)
-  
-  pos_doi   <- regexpr("10.1", x, fixed=TRUE)[1]
-  pos_space <- gregexpr("\\s", x)[[1]]
-  
-  if (pos_space[1] != -1) {
-    id_space  <- which(abs(pos_space - pos_doi) == min (abs(pos_space - pos_doi)))
-    
-    if (pos_space[id_space] < pos_doi) id_space <- id_space + 1
-    
-    if (!is.na(pos_space[id_space])) {
-      doi = substr(x, pos_doi, pos_space[id_space])
-    } else {
-      doi = substr(x, pos_doi, nchar(x))  
-    }
-  } else {
-    doi = substr(x, pos_doi, nchar(x))
-  }
-  
-  return(doi)
-}) %>% paste()
+# all$doi3 <- sapply(all$doi2, function(x) {
+#   
+#   doi = ""
+#   
+#   x = trimws(x)
+#   
+#   pos_doi   <- regexpr("10.1", x, fixed=TRUE)[1]
+#   pos_space <- gregexpr("\\s", x)[[1]]
+#   
+#   if (pos_space[1] != -1) {
+#     id_space  <- which(abs(pos_space - pos_doi) == min (abs(pos_space - pos_doi)))
+#     
+#     if (pos_space[id_space] < pos_doi) id_space <- id_space + 1
+#     
+#     if (!is.na(pos_space[id_space])) {
+#       doi = substr(x, pos_doi, pos_space[id_space])
+#     } else {
+#       doi = substr(x, pos_doi, nchar(x))  
+#     }
+#   } else {
+#     doi = substr(x, pos_doi, nchar(x))
+#   }
+#   
+#   return(doi)
+# }) %>% paste()
 
-all$doi <- all$doi3
+all$doi <- all$doi1
+all$doi[is.na(all$doi1)] <- all$doi2[is.na(all$doi1)]
 
 all$doi[which(all$filename == "Griffin et al 2014.pdf")] <- "10.1007/s10584-013-0963-5" 
 all$doi[which(all$filename == "McCollum et al 2013.pdf")] <- "10.1142/S2010007813400101" 
@@ -208,23 +203,23 @@ all$doi[which(all$filename == "Robiou du Pont 2016.pdf")] <- "10.1088/1748-9326/
 all$doi[which(all$filename == "Vaughan 2016.pdf")] <- "10.1088/1748-9326/11/9/095003" 
 all$doi[which(all$filename == "Wise et al 2009.pdf")] <- "10.1126/science.1168475" 
 
-# To copy to WOS:
-# paste(paste0("DO=", c((all %>% 
-#                          select(filename,AU,TI,doi,integrate,model,`negative emission`,`carbon dioxide removal`,`BECS`,`BECCS`,afforestation,AR,DAC,EW,relevant) %>% 
-#                          arrange(desc(relevant)) %>% 
-#                          filter(doi != "") %>% 
-#                          filter(`negative emission` != 0) %>% 
-#                          select(doi))$doi, 
-#                       "10.1038/nclimate2572")), collapse=" OR ")
+docs <- all %>%
+  filter(!is.na(doi) & nchar(doi) > 5) %>%
+  filter(`negative emission` != 0)
 
-# To copy to Scopus:
-paste(paste0("DOI(", c((all %>%
-                         select(filename,AU,TI,doi,integrate,model,`negative emission`,`carbon dioxide removal`,`BECS`,`BECCS`,afforestation,AR,DAC,EW,relevant) %>%
-                         arrange(desc(relevant)) %>%
-                         filter(doi != "") %>%
-                         filter(`negative emission` != 0) %>%
-                         select(doi))$doi,
-                      "10.1038/nclimate2572"), ")"), collapse=" OR ")
+nodoi <- all %>%
+  filter(is.na(doi) | nchar(doi) < 5) %>%
+  filter(`negative emission` != 0)
+
+cdocs <- c(docs$doi,"10.1038/nclimate2572")
+
+w_query <- paste(paste0('DO=("',cdocs, '")'), collapse=' OR ')
+
+write(w_query, file = "wos_query.txt")
+
+s_query <- paste(paste0('DOI("',cdocs, '")'), collapse=' OR ')
+
+write(s_query, file = "s_query.txt")
 
 # Write CSV
 write.csv(all, file = "NETsinIAMstudies_new.csv")
