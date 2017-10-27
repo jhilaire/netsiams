@@ -203,15 +203,29 @@ all$doi[which(all$filename == "Robiou du Pont 2016.pdf")] <- "10.1088/1748-9326/
 all$doi[which(all$filename == "Vaughan 2016.pdf")] <- "10.1088/1748-9326/11/9/095003" 
 all$doi[which(all$filename == "Wise et al 2009.pdf")] <- "10.1126/science.1168475" 
 
-docs <- all %>%
+all$PY <- as.numeric(all$PY)
+
+
+
+# Write CSV
+write.csv(all, file = "NETsinIAMstudies_new.csv")
+
+selection <- read.csv('literature_selection.csv',sep=';') %>%
+  select(doi,keep)
+
+new_all <- left_join(all,selection)
+
+
+docs <- new_all %>%
   filter(!is.na(doi) & nchar(doi) > 5) %>%
+  filter(keep=="T") %>%
   filter(`negative emission` != 0)
 
-nodoi <- all %>%
+nodoi <- new_all %>%
   filter(is.na(doi) | nchar(doi) < 5) %>%
   filter(`negative emission` != 0)
 
-cdocs <- c(docs$doi,"10.1038/nclimate2572")
+cdocs <- c(docs$doi,"10.1038/nclimate2572","10.1126/science.1168475")
 
 w_query <- paste(paste0('DO=("',cdocs, '")'), collapse=' OR ')
 
@@ -221,6 +235,287 @@ s_query <- paste(paste0('DOI("',cdocs, '")'), collapse=' OR ')
 
 write(s_query, file = "s_query.txt")
 
-# Write CSV
-write.csv(all, file = "NETsinIAMstudies_new.csv")
+s_results <- read.csv('scopus.csv')
+
+s_dois <- tolower(s_results$DOI)
+
+docs$in_scopus <- ifelse(
+  tolower(docs$doi) %in% s_dois,
+  T,
+  F
+)
+
+missings <- docs %>%
+  filter(in_scopus==F)
+
+missings$AU_simple <- sapply(strsplit(missings$AU," et"), `[`, 1)
+
+
+
+s_query2 <- paste0(paste(paste0(
+  '(TITLE("',missings$TI, '") AND AUTHOR-NAME(',missings$AU_simple,'))'), 
+  collapse=' OR '
+  ), 'AND NOT TITLE("ERRATUM")')
+
+wos_query2 <- paste0('(',paste(paste0(
+  '(TI =("',missings$TI, '") AND AU =(',missings$AU_simple,'))'), 
+  collapse=' OR '
+), ') NOT TI=("vol 294")')
+
+write(wos_query2, file = "wos_query_2.txt")
+
+both_queries <- paste0('(',w_query,') OR (',wos_query2,')')
+
+write(both_queries, file = "wos_query_3.txt")
+
+
+mips <- select(docs,MIP,TI,AU)
+
+nodes <- read.csv("../refs/bib_couple [nodes].csv") %>%
+  rename(doi=url,Id=id) %>%
+  mutate(
+    doi = gsub("http://dx.doi.org/","",doi),
+    Id=paste0(as.character(Id),".0")
+    )
+
+node_map <- select(left_join(nodes, select(docs,MIP,doi)),Id,MIP)
+
+node_map$MIP[node_map$MIP %in% c(NA,"RoSE Special Issue")] <- "Single IAM studies"
+
+#igraph::read.graph("../refs/bib_couple.gml", format=c("gml"))
+g <- igraph::read.graph("../refs/citation.net", format=c("pajek"))
+#g <- igraph::read.graph("../refs/citation.gml", format=c("gml"))
+
+write.csv(node_map, "../refs/bib_couple [nodes] mapped.csv")
+
+
+
+nodes <- read.csv("../refs/citation [nodes].csv") %>%
+  rename(doi=url,Id=id) %>%
+  mutate(
+    doi = gsub("http://dx.doi.org/","",doi),
+    Id=paste0(as.character(Id),".0")
+  )
+
+node_map <- select(left_join(nodes, select(docs,MIP,doi)),Id,MIP)
+
+node_map$MIP[node_map$MIP %in% c(NA,"RoSE Special Issue")] <- "Single IAM studies"
+
+#igraph::read.graph("../refs/bib_couple.gml", format=c("gml"))
+g <- igraph::read.graph("../refs/citation.net", format=c("pajek"))
+#g <- igraph::read.graph("../refs/citation.gml", format=c("gml"))
+
+write.csv(node_map, "../refs/citation [nodes] mapped.csv")
+
+
+
+s_text <- readLines("../refs/savedrecs.txt")
+got_docs <- bibliometrix::isi2df(s_text)  %>%
+  rename(doi = UT)
+
+got_docs$AU_simple <- tolower(sapply(strsplit(got_docs$AU,";"), `[`, 1))
+
+#################
+## Cocitation
+nodes <- read.csv("../refs/cocitation [nodes].csv") %>%
+  separate(label,c("AU","PY","JI","v","p","DI"),sep=",",remove=F,convert=T) %>%
+  rename(Id=id) %>%
+  mutate(
+    PY = as.numeric(PY),
+    Id=paste0(as.character(Id),".0"),
+    VL=gsub("v","",v),
+    DI=gsub(" ","",tolower(gsub("doi ","",DI)))
+    )
+
+nodes$AU_simple <- tolower(sapply(strsplit(nodes$AU," "), `[`, 1))
+nodes$AU_simple <- tolower(gsub(".","",nodes$AU,fixed=T))
+
+node_matches <- nodes %>%
+  mutate(doi=NA)
+
+got_docs$DI <- tolower(gsub("doi ","",got_docs$DI))
+
+nmatches<-0
+doubles <- 0
+nones <- 0
+dups <- data.frame()
+
+got_docs$fmatch <- 0
+for(i in 1:nrow(got_docs)) {
+  d <- got_docs[i,]
+  matches <- filter(nodes,AU_simple==d$AU_simple,PY==d$PY) %>%
+    mutate(TI=d$TI,mDI = d$DI)
+  if (nrow(matches)==1) {
+    node_matches$doi[node_matches$Id==matches$Id[1]] <- d$doi
+    got_docs$fmatch[got_docs$doi==d$doi] <- 1
+    nmatches <- nmatches+1
+  } else if (nrow(matches)>1) {
+    doubles <- doubles +1
+    if (!is.na(d$DI)) {
+      matches <- filter(nodes,DI==d$DI)
+    } else {
+      print(d$TI)
+    }
+    if (nrow(matches)==1) {
+      node_matches$doi[node_matches$Id==matches$Id[1]] <- d$doi
+      got_docs$fmatch[got_docs$doi==d$doi] <- 1
+      nmatches < nmatches + 1
+    } else if (nrow(matches)>1) {
+      node_matches$doi[node_matches$Id==matches$Id[1]] <- d$doi
+      got_docs$fmatch[got_docs$doi==d$doi] <- 1
+      nmatches <- nmatches+1
+    } else if (nrow(matches)==0) {
+    }
+  } else if (nrow(matches)==0) {
+    nones <- nones + 1
+    #print(d$TI)
+  }
+}
+
+print(nmatches)
+print(doubles)
+print(nones)
+
+nofind <- filter(got_docs,fmatch==0)
+
+matched <- filter(node_matches,!is.na(doi))
+
+node_map <- node_matches %>%
+  mutate(PY=as.numeric(PY))
+
+node_map$short_label <- paste0(node_map$AU,", ",node_map$PY)
+node_map$label_copy <- node_map$label
+
+
+node_map$hasdoi <- ifelse(is.na(node_map$doi),0,1)
+node_map$hasdoi[grepl("ipcc",node_map$label,ignore.case=T)] <- 2
+
+
+# Tirpak and Vellinga 1990
+# Leggett et al 1992
+# Nakicenovic et al 2000
+# Clarke et al 2014
+# Search also for Barker et al 2007
+
+node_map[node_map$DI=="10.1126/science.1168475" & !is.na(node_map$DI),]
+
+node_map$hasdoi[node_map$DI=="10.1126/science.1168475" & !is.na(node_map$DI)] <- 1
+
+node_map$hasdoi[grepl("climate change 2014: mitigation of climate change",node_map$JI)] <- 2
+node_map$hasdoi[grepl("climate change 1992",node_map$JI)] <- 2
+node_map$hasdoi[grepl("special report emiss",node_map$JI)] <- 2
+node_map$hasdoi[grepl("climate change 2007",node_map$JI)] <- 2
+
+
+node_map$slabel <- ""
+node_map$slabel[node_map$hasdoi>0] <- as.character(node_map$short_label[node_map$hasdoi>0])
+
+node_map <- select(node_map,Id,doi,slabel,hasdoi,label_copy,PY)
+
+write.csv(node_map, "../refs/cocitation [nodes] mapped.csv")
+
+###################################
+
+nodes <- read.csv("../refs/co_citation_gt_2 [nodes].csv") %>%
+  separate(label,c("AU","PY","JI","v","p","DI"),sep=",",remove=F,convert=T) %>%
+  rename(Id=id) %>%
+  mutate(
+    PY = as.numeric(PY),
+    Id=paste0(as.character(Id),".0"),
+    VL=gsub("v","",v),
+    DI=gsub(" ","",tolower(gsub("doi ","",DI)))
+  )
+
+nodes$AU_simple <- tolower(sapply(strsplit(nodes$AU," "), `[`, 1))
+nodes$AU_simple <- tolower(gsub(".","",nodes$AU,fixed=T))
+
+node_matches <- nodes %>%
+  mutate(doi=NA)
+
+got_docs$DI <- tolower(gsub("doi ","",got_docs$DI))
+
+nmatches<-0
+doubles <- 0
+nones <- 0
+dups <- data.frame()
+
+got_docs$fmatch <- 0
+for(i in 1:nrow(got_docs)) {
+  d <- got_docs[i,]
+  matches <- filter(nodes,AU_simple==d$AU_simple,PY==d$PY) %>%
+    mutate(TI=d$TI,mDI = d$DI)
+  if (nrow(matches)==1) {
+    node_matches$doi[node_matches$Id==matches$Id[1]] <- d$doi
+    got_docs$fmatch[got_docs$doi==d$doi] <- 1
+    nmatches <- nmatches+1
+  } else if (nrow(matches)>1) {
+    doubles <- doubles +1
+    if (!is.na(d$DI)) {
+      matches <- filter(nodes,DI==d$DI)
+    } else {
+      print(d$TI)
+    }
+    if (nrow(matches)==1) {
+      node_matches$doi[node_matches$Id==matches$Id[1]] <- d$doi
+      got_docs$fmatch[got_docs$doi==d$doi] <- 1
+      nmatches < nmatches + 1
+    } else if (nrow(matches)>1) {
+      node_matches$doi[node_matches$Id==matches$Id[1]] <- d$doi
+      got_docs$fmatch[got_docs$doi==d$doi] <- 1
+      nmatches <- nmatches+1
+    } else if (nrow(matches)==0) {
+    }
+  } else if (nrow(matches)==0) {
+    nones <- nones + 1
+    #print(d$TI)
+  }
+}
+
+print(nmatches)
+print(doubles)
+print(nones)
+
+nofind <- filter(got_docs,fmatch==0)
+
+matched <- filter(node_matches,!is.na(doi))
+
+node_map <- node_matches %>%
+  mutate(PY=as.numeric(PY))
+
+node_map$short_label <- paste0(node_map$AU,", ",node_map$PY)
+node_map$label_copy <- node_map$label
+
+
+node_map$hasdoi <- ifelse(is.na(node_map$doi),0,1)
+node_map$hasdoi[grepl("ipcc",node_map$label,ignore.case=T)] <- 2
+
+
+# Tirpak and Vellinga 1990
+# Leggett et al 1992
+# Nakicenovic et al 2000
+# Clarke et al 2014
+# Search also for Barker et al 2007
+
+node_map[node_map$DI=="10.1126/science.1168475" & !is.na(node_map$DI),]
+
+node_map$hasdoi[node_map$DI=="10.1126/science.1168475" & !is.na(node_map$DI)] <- 1
+
+node_map$hasdoi[grepl("climate change 2014: mitigation of climate change",node_map$JI)] <- 2
+node_map$hasdoi[grepl("climate change 1992",node_map$JI)] <- 2
+node_map$hasdoi[grepl("special report emiss",node_map$JI)] <- 2
+node_map$hasdoi[grepl("climate change 2007",node_map$JI)] <- 2
+
+
+node_map$slabel <- ""
+node_map$slabel[node_map$hasdoi>0] <- as.character(node_map$short_label[node_map$hasdoi>0])
+
+node_map <- select(node_map,Id,doi,slabel,hasdoi,label_copy,PY)
+
+write.csv(node_map, "../refs/co_citation_gt_2 [nodes] mapped.csv")
+
+
+
+  
+
+
 
