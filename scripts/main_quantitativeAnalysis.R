@@ -50,6 +50,10 @@ if (u_reload1p5_data) {
 
 
 #### PLOT DATA #########################################
+#=== Panel figure Emissions & CP ========
+source("scripts/plot_panel_emi_cp.R")
+
+
 #=== Cum gross NE vs cum gross PE (scatter plots) ======
 source("scripts/plot_quantAnal_cumGPEvscumGNE.R")
 

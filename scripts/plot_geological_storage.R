@@ -29,24 +29,69 @@ data_storage %>% filter(`Data categorisationresource` == "Total", measurement ==
 
 
 dooley_storage <- read.csv("data/Dooley2013-fig2Digitalised2.csv", 
-                           header = FALSE, col.names = c("region", "type", "value"), 
+                           #header = FALSE, col.names = c("region", "type", "value"), 
                            stringsAsFactors = FALSE)
 
 dooley_storage <- dooley_storage %>% 
   spread(region, value) %>% 
-  gather(region, value, -type) %>% 
-  mutate(value=ifelse(is.na(value), 0, value)) %>% 
-  spread(region, value) %>% 
-  mutate(USA=USA+Canada) %>% 
-  select(-Canada) %>% 
+  gather(region, value, -storage_type) %>% 
+  mutate(value=as.numeric(value)) %>%
+  mutate(value=ifelse(is.na(value), 0.00, value)) %>%
+  spread(storage_type, value) %>% 
+  mutate(`Deep Saline Filled Formations-offshore` = `Deep Saline Filled Formations-offshore`-`Deep Saline Filled Formations-onshore`) %>% 
+  mutate(`Deep Saline Filled Formations-onshore`  = `Deep Saline Filled Formations-onshore`-`Depleted Oil and Gas Fields`) %>% 
+  mutate(`Depleted Oil and Gas Fields`            = `Depleted Oil and Gas Fields`-`Deep Unmineable Coal Seams`) %>% 
+  gather(storage_type,value,-region) %>% 
+  spread(region, value) %>%
+  rename(`Pacific OECD`=Australia) %>% 
+  #mutate(NAM = USA + Canada) %>% 
+  #select(-Canada, -USA) %>% 
   mutate(Europe = `Western Europe`+`Eastern Europe`) %>% 
   select(-`Western Europe`, -`Eastern Europe`) %>% 
   rename(India=`Indian Subcontinent`) %>% 
-  rename(Other=`South Korea`) %>% 
-  gather(region, value, -type) %>% 
+  #rename(`Other regions`=`South Korea`) %>% 
+  gather(region, value, -storage_type) %>% 
   mutate(value=ifelse(is.na(value), 0, value))
 
 write.csv(dooley_storage, file="data/dooley_storage.csv", row.names = FALSE)
+
+edmonds_storage <- read.csv2("data/Edmonds2013-storage.csv", 
+                           #header = FALSE, col.names = c("region", "type", "value"), 
+                           stringsAsFactors = FALSE)
+
+edmonds_storage <- edmonds_storage %>% 
+  mutate(storage_type=trimws(storage_type)) %>% 
+  spread(region, value) %>% 
+  gather(region, value, -storage_type) %>% 
+  mutate(value=as.numeric(value)) %>%
+  mutate(value=ifelse(is.na(value), 0.00, value)) %>%
+  spread(storage_type, value) %>% 
+  mutate(`Deep Saline Formation-Offshore` = `Deep Saline Formation-Offshore`-`Deep Saline Formation-Onshore`) %>% 
+  mutate(`Deep Saline Formation-Onshore`  = `Deep Saline Formation-Onshore`-`Depleted Oil and Gas Fields`) %>% 
+  mutate(`Depleted Oil and Gas Fields`    = `Depleted Oil and Gas Fields`-`Deep Unmineable Coal Basins`) %>% 
+  gather(storage_type,value,-region) %>% 
+  spread(region, value) %>%
+  #mutate(NAM = USA + Canada) %>% 
+  #select(-Canada, -USA) %>% 
+  mutate(Europe = `Western Europe`+`Eastern Europe`) %>% 
+  mutate(`Southeast Asia` = `Southeast Asia`) %>% 
+  rename(`Pacific OECD`=Australia_NZ) %>% 
+  select(-`Western Europe`, -`Eastern Europe`) %>% 
+  #rename(India=`Indian Subcontinent`) %>% 
+  #rename(`Other regions`=`South Korea`) %>% 
+  gather(region, value, -storage_type) %>% 
+  mutate(value=ifelse(is.na(value), 0, value)) %>% 
+  mutate(storage_type=factor(storage_type,
+                             levels=c("Deep Saline Formation-Onshore",
+                                      "Deep Saline Formation-Offshore",
+                                      "Depleted Oil and Gas Fields",
+                                      "Deep Unmineable Coal Basins"),
+                             labels=c("Deep Saline Filled Formations-onshore",
+                                      "Deep Saline Filled Formations-offshore",
+                                      "Depleted Oil and Gas Fields",
+                                      "Deep Unmineable Coal Seams")))
+
+write.csv(edmonds_storage, file="data/edmonds_storage.csv", row.names = FALSE)
 
 # Compiled data
 def_regions <- data.frame(
@@ -55,17 +100,22 @@ def_regions <- data.frame(
   stringsAsFactors = FALSE
 )
 
+mprs <- readxl::read_xlsx("data/model_proj_region_selection.xlsx")
+
 scenario_storage <- v_data_timeTechTemp_regional %>% 
   filter(variable == "Emissions|CO2|Carbon Capture and Storage|Biomass") %>% 
-  inner_join(def_regions, by=c("region")) %>% 
+  #inner_join(def_regions, by=c("region")) %>% 
   filter(period %in% seq(2010,2100,10)) %>% 
   filter(!tempcat %in% c("Other scenario", "Likely 3.0°C scenario")) %>%
   mutate(tempcat = ifelse(tempcat %in% c("1.5°C scenario"), "1.5°C", "2.0°C")) %>% 
   select(-variable) %>% 
-  group_by(model,scenario,region,region2,tempcat) %>% 
+  group_by(model,scenario,region,tempcat) %>% 
   mutate(dt=0.5*(lead(period, default=2100) - period) + 0.5*(period - lag(period, default=2010))) %>% 
   summarise(value=sum(value/1000*dt)) %>% 
   ungroup() %>% 
+  mutate(proj=substr(scenario,1,4)) %>% 
+  inner_join(mprs, by=c("model","proj","region")) %>% 
+  filter(keep == TRUE) %>% 
   group_by(region2,tempcat) %>% 
   summarise(
     min=min(value, na.rm=T),
@@ -84,17 +134,164 @@ scenario_storage <- v_data_timeTechTemp_regional %>%
 
 write.csv(scenario_storage, file="data/scenario_storage.csv", row.names = FALSE)
 
-ggplot(scenario_storage) + 
-  geom_bar(aes(x=tempcat, y=med, fill=tempcat), stat="identity")
+# ggplot(scenario_storage) + 
+#   geom_bar(aes(x=tempcat, y=med, fill=tempcat), stat="identity")
+# 
+# ggplot(dooley_storage) + 
+#   geom_bar(aes(x=region, y=value, fill=storage_type), stat="identity") +
+#   facet_wrap(~region, ncol=6)
+# 
+# 
+# ggplot(scenario_storage) + 
+#   geom_boxplot(aes(x=tempcat, ymin=min, ymax=max, lower=p25, upper=p75, middle=med, fill=tempcat), stat="identity") +
+#   facet_wrap(~region2, scales="free_y") +
+#   theme_minimal() +
+#   theme(legend.position="bottom") +
+#   #guides(fill=FALSE) +
+#   xlab("")
 
-ggplot(scenario_storage) + 
-  geom_boxplot(aes(x=tempcat, ymin=min, ymax=max, lower=p25, upper=p75, middle=med, fill=tempcat), stat="identity") +
-  facet_wrap(~region2, scales="free_y") +
-  theme_bw() +
-  theme(legend.position="bottom") +
-  #guides(fill=FALSE) +
-  xlab("")
+storage_colors <- data.frame(
+  storage_type = c("Deep Saline Filled Formations-onshore",
+                   "Deep Saline Filled Formations-offshore",
+                   "Depleted Oil and Gas Fields",
+                   "Deep Unmineable Coal Seams"),
+  color        = c("#494529ff",
+                   "#93ccddff",
+                   "#fe0000ff",
+                   "#212526ff"),
+  stringsAsFactors = FALSE
+)
 
+dooley_storage %>% 
+  group_by(region) %>% 
+  summarise(value=sum(value)) %>% 
+  ungroup()
+
+edmonds_storage %>% 
+  group_by(region) %>% 
+  summarise(value=sum(value)) %>% 
+  ungroup()
+
+region_ymax <- data_frame(
+  region = c("Africa",             # 11
+             "China",              # 532
+             "Europe",             #216
+             "Former Soviet Union", # 171 
+             "India",           #87
+             "Japan",           #10
+             "Latin America",   #901
+             "Middle East",     #175
+             "Southeast Asia",  #26 
+             "Pacific OECD",    # 
+             "USA",             #4273
+             "Other"),          #?
+  ymax   = c(100, 200, 200, 200, 100, 30, 500, 200, 300, 100, 200, 400),
+  stringsAsFactors = FALSE
+)
+
+svglite::svglite("storage_scenarios.svg", width=10, height=10)
+par(mfrow=c(3,4), las=1)
+
+for (kreg in c("Africa", "China", "Europe", "Former Soviet Union", "India", "Japan", "Latin America", "Middle East", "Southeast Asia", "USA", "Pacific OECD")) {
+ 
+  if (kreg == "Africa") {  
+   plot(0,0,type="n",
+        xaxs="i", yaxs="i",
+        xlim=c(0.5,4.5),ylim=c(0,region_ymax$ymax[which(region_ymax$region == kreg)]),
+        xlab="",ylab="",axes=F, main=kreg)
+  } else {
+    #par(new=TRUE)
+    plot(0,0,type="n",
+         xaxs="i", yaxs="i",
+         xlim=c(0.5,4.5),ylim=c(0,region_ymax$ymax[which(region_ymax$region == kreg)]),
+         xlab="",ylab="",axes=F, main=kreg)
+  }
+ 
+ offset=0.35
+ 
+ lines(c(0.5,4.5), c(0,0))
+ 
+ # Capacity
+ pos=1
+ curval=0
+ for (kst in c("Deep Unmineable Coal Seams",
+               "Depleted Oil and Gas Fields",
+               "Deep Saline Filled Formations-onshore",
+               "Deep Saline Filled Formations-offshore")) {
+   print(paste(kreg, ":", kst, " > ", dooley_storage$value[which(dooley_storage$region == kreg & dooley_storage$storage_type == kst)]))
+   rect(
+     pos-offset, curval,
+     pos+offset, curval+dooley_storage$value[which(dooley_storage$region == kreg & dooley_storage$storage_type == kst)],
+     col=storage_colors$color[which(storage_colors$storage_type == kst)],
+     border=NA)
+   
+   curval <- curval+dooley_storage$value[which(dooley_storage$region == kreg & dooley_storage$storage_type == kst)]
+ }
+ 
+ # Capacity
+ pos=2
+ curval=0
+ for (kst in c("Deep Unmineable Coal Seams",
+               "Depleted Oil and Gas Fields",
+               "Deep Saline Filled Formations-onshore",
+               "Deep Saline Filled Formations-offshore")) {
+   print(paste(kreg, ":", kst, " > ", edmonds_storage$value[which(edmonds_storage$region == kreg & edmonds_storage$storage_type == kst)]))
+   rect(
+     pos-offset, curval,
+     pos+offset, curval+edmonds_storage$value[which(edmonds_storage$region == kreg & edmonds_storage$storage_type == kst)],
+     col=storage_colors$color[which(storage_colors$storage_type == kst)],
+     border=NA)
+   
+   curval <- curval+edmonds_storage$value[which(edmonds_storage$region == kreg & edmonds_storage$storage_type == kst)]
+ }
+ 
+ 
+ # 2°C
+ color <- "#3f91c5"
+ pos = 3
+ curtemp = "2.0°C"
+ lines(c(pos, pos), 
+       c(scenario_storage$min[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], 
+         scenario_storage$max[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)]), 
+         col=color)
+ rect(
+   pos-offset, scenario_storage$p15[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], 
+   pos+offset, scenario_storage$p85[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], 
+   col=color, border=NA
+ )
+ lines(c(pos-offset, pos+offset), 
+       c(scenario_storage$med[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], scenario_storage$med[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)]), col="#ffffff")
+ points(c(pos, pos), 
+        c(scenario_storage$mean[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], scenario_storage$mean[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)]), pch=21, col=color, bg="#ffffff")
+ 
+ 
+ # 1.5°C
+ if (kreg != "Pacific OECD") {
+   print("HELLO!")
+   color <- "#074594"
+   pos = 4
+   curtemp = "1.5°C"
+   lines(c(pos, pos), 
+         c(scenario_storage$min[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], 
+           scenario_storage$max[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)]), 
+         col=color)
+   rect(
+     pos-offset, scenario_storage$p15[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], 
+     pos+offset, scenario_storage$p85[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], 
+     col=color, border=NA
+   )
+   lines(c(pos-offset, pos+offset), 
+         c(scenario_storage$med[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], scenario_storage$med[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)]), col="#ffffff")
+   points(c(pos, pos), 
+          c(scenario_storage$mean[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)], scenario_storage$mean[which(scenario_storage$region2 == kreg & scenario_storage$tempcat == curtemp)]), pch=21, col=color, bg="#ffffff")
+ }
+ 
+ 
+ axis(2)
+  
+}
+par(mfrow=c(1,1))
+dev.off()
 
 # library(ggsubplot)
 # library(ggplot2)

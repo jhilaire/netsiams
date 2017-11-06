@@ -1,0 +1,640 @@
+---
+title: "Quantitative evidence from IAM scenarios"
+author: "Jerome Hilaire"
+date: "20 Oktober 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Paths and drectories
+u_path_1p5             <- "../../../bitbucket/beccs/data/REMIND_generics_20150512.csv"
+u_path_1p5ScenarioInfo <- "../../../bitbucket/beccs/data/one_five_scenarios.Rdata"
+u_reload1p5_data       <- FALSE
+
+#=== Libraries =========================================
+library(tidyverse)
+library(ggplot2)
+#library(plotly)
+library(grid)
+library(gridExtra) 
+library(readxl)
+
+#=== Own functions =====================================
+source("../functions/functions_quantitativeAnalysis.R", encoding = "UTF-8")
+```
+
+```{r loadData, include=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+dooley_storage <- read.csv("../data/Dooley2013-fig2Digitalised2.csv", 
+                           header = FALSE, col.names = c("region", "type", "value"), 
+                           stringsAsFactors = FALSE)
+#=== Compiled data from NETs review ====================
+load("../../../bitbucket/beccs/data/dataAll.RData")
+load("../../../bitbucket/beccs/data/dataplotAll.RData")
+#=== Rogelj et al (2015) scenarios (REMIND only) =======
+if (u_reload1p5_data) {
+  #--- Load REMIND data ----------------------------------
+  v_RData_1p5 <- paste0(substr(u_path_1p5, 1, nchar(u_path_1p5)-3), "RData")
+  if (!file.exists(v_RData_1p5) && u_readOriginalData) {
+    data_1p5 <- read.csv2(u_path_1p5) %>%
+      select(Model, Scenario, Region, Variable, Unit, `X2005`, `X2010`, `X2015`, `X2020`, `X2025`, `X2030`, `X2035`,
+             `X2040`, `X2045`, `X2050`, `X2055`, `X2060`, `X2070`, `X2080`, `X2090`, `X2100`)
+    names(data_1p5) <- c("model", "scenario", "region", "variable", "unit", paste(c(seq(2005,2055,5), seq(2060,2100,10))))
+    data_1p5 <- data_1p5 %>%
+      gather(period, value, -model, -scenario, -region, -variable, -unit)
+
+    save(data_1p5, file = v_RData_1p5)
+  } else {
+    load(v_RData_1p5)
+  }
+  #--- Load REMIND scenario information ------------------
+  load(u_path_1p5ScenarioInfo)
+  #=== MESSAGE and REMIND data from Joeri ================
+  data_1p5v2scenclass <- readxl::read_xls("../../../bitbucket/beccs/data/1p5CSCENs_categorization_forJanMINX.xls")
+}
+#=== AMPERE scenarios =======
+load("../../../bitbucket/beccs/data/AmperePublic_WP2+3_2014-10-09.RData")
+#=== SSP scenarios =======
+load("../../../bitbucket/beccs/data/v_data5.RData")
+```
+
+## 1. Emission pathways, NE deployment and NE upscaling
+
+These are figures taken from the NETs review. We would like to use something similar here but with a different formating.
+
+```{r emipathways, echo=FALSE, message=FALSE, warning=FALSE, fig.keep='none'}
+source("../../../bitbucket/beccs/functions/useful_functions.R", encoding = 'UTF-8')
+
+#==== Net emissions
+# By temp targets
+v_dataplot <- compute_stats_tempcat(v_data_tempTargets_world_plot, "Emissions|CO2")
+p1_p1 <- plot_ribbons_tempcat(v_dataplot, lower="q15", upper="q85", ylab="Net CO2 emissions [Gt(CO2)/yr]")
+
+# By Tech and policy timing
+v_dataplot <- compute_stats_allcat(rbind(
+  v_data_timeTechTemp_world_plot   %>% 
+    filter(#allcat != "No CCS/BECCS", 
+           tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+    mutate(value=value/1000),
+  v_data_timeTechTemp_world_plot   %>% 
+    filter(#allcat != "No CCS/BECCS", 
+           tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+    mutate(tempcat = "Likely and Medium 2.0°C") %>% 
+    mutate(value=value/1000)) %>% 
+    filter(!is.na(allcat) | allcat != "NA") %>% 
+    mutate(allcat=paste(allcat)) %>% 
+    mutate(allcat = ifelse(allcat %in% c("Limited bioenergy", "No CCS/BECCS"), "Limited bioenergy and no CCS/BECCS", allcat)) %>% 
+    mutate(allcat = factor(allcat, levels=c("Default", "Low energy intensity", "Limited bioenergy and no CCS/BECCS", "Delayed action until 2030"), ordered=TRUE)), 
+  "Emissions|CO2")
+p2_p1 <- plot_ribbons_allcat_byTemp(v_dataplot %>% filter(tempcat == "Likely and Medium 2.0°C"), ylab="Net CO2 emissions [Gt(CO2)/yr]") # 15th and 85th percentiles by default
+
+#==== NE deployment
+# By temp targets
+v_dataplot <- compute_stats_tempcat(
+  compute_cumulate(v_data_tempTargets_world_plot, "Emissions|CO2|Carbon Capture and Storage|Biomass", c(2100)), "Emissions|CO2|Carbon Capture and Storage|Biomass") %>% 
+  filter(tempcat != "Other scenario") %>% 
+  mutate(tempcat = factor(tempcat, levels=c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario", "Likely 3.0°C scenario"), ordered=TRUE))
+p1_p2 <- plot_cumulative_boxplots(v_dataplot, ylab="Cumulated gross negative CO2 emissions 2010-2100 [Gt(CO2)]", 
+                                  ADD_STATS=compute_cumulate(v_data_tempTargets_world_plot, "Emissions|CO2|Carbon Capture and Storage|Biomass", c(2100)) %>% 
+                                            ungroup() %>% 
+                                            filter(tempcat != "Other scenario") %>% 
+                                            mutate(tempcat = factor(tempcat, levels=c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario", "Likely 3.0°C scenario"), ordered=TRUE)))
+# By Tech and policy timing
+v_dataplot <- compute_stats_allcat(
+  compute_cumulate_allcat(v_data_timeTechTemp_world_plot   %>% 
+                            filter(#allcat != "No CCS/BECCS", 
+                                   tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+                            mutate(tempcat = "Likely and Medium 2.0°C") %>% 
+                            mutate(value=value) %>% 
+                            filter(!is.na(allcat) | allcat != "NA") %>% 
+                            mutate(allcat = paste(allcat)) %>% 
+                            mutate(allcat = ifelse(allcat %in% c("Limited bioenergy", "No CCS/BECCS"), "Limited bioenergy and no CCS/BECCS", allcat)) %>% 
+                            mutate(allcat = factor(allcat, levels=c("Default", "Low energy intensity", "Limited bioenergy and no CCS/BECCS", "Delayed action until 2030"), ordered=TRUE)), 
+                          "Emissions|CO2|Carbon Capture and Storage|Biomass", c(2100)), 
+  "Emissions|CO2|Carbon Capture and Storage|Biomass") #%>% 
+  #mutate(tempcat = factor(tempcat, levels=c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario", "Likely 3.0°C scenario", "Other scenario"), ordered=TRUE))
+p2_p2 <- plot_cumulative_boxplots_allcat(v_dataplot, ylab="Cumulated gross negative CO2 emissions 2011-2100 [Gt(CO2)]",
+                                         ADD_STATS=compute_cumulate_allcat(v_data_timeTechTemp_world_plot   %>% 
+                                                                             filter(#allcat != "No CCS/BECCS", 
+                                                                               tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+                                                                             mutate(tempcat = "Likely and Medium 2.0°C") %>% 
+                                                                             mutate(value=value) %>% 
+                                                                             filter(!is.na(allcat) | allcat != "NA") %>% 
+                                                                             mutate(allcat = paste(allcat)) %>% 
+                                                                             mutate(allcat = ifelse(allcat %in% c("Limited bioenergy", "No CCS/BECCS"), "Limited bioenergy and no CCS/BECCS", allcat)) %>% 
+                                                                             mutate(allcat = factor(allcat, levels=c("Default", "Low energy intensity", "Limited bioenergy and no CCS/BECCS", "Delayed action until 2030"), ordered=TRUE)), 
+                                                                           "Emissions|CO2|Carbon Capture and Storage|Biomass", c(2100)))
+
+#=== NE upscaling
+v_dataplot1 <- compute_avgDeployRate2030250(v_data_tempTargets_world_plot, "Emissions|CO2|Carbon Capture and Storage|Biomass")
+tmp <- v_dataplot1  %>% 
+  rename(value=avgDeployRate_annual) %>% 
+  group_by(tempcat) %>% 
+  summarise(
+    count_mod = length(unique(model)),
+    count_scenario = length(unique(scenario)),
+    count = n()
+      ) %>% 
+  ungroup()
+v_dataplot2 <- compute_stats_tempcat(v_dataplot1 %>% rename(value=avgDeployRate_annual), "Emissions|CO2|Carbon Capture and Storage|Biomass") %>% 
+  filter(tempcat != "Other scenario") %>% 
+  mutate(tempcat = factor(tempcat, levels=c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario", "Likely 3.0°C scenario"), ordered=TRUE))
+write.csv(v_dataplot, file = "AverageRate_of_NETsDeployment2030250.csv")
+p1_p4 <- plot_avgDeployRate20302050_boxplots(
+  v_dataplot1 %>% rename(value=avgDeployRate_annual), v_dataplot2, ylab="Averaged annual deployment rate of NE 2030-2050 [Mt(CO2)/yr]",
+  ADD_STATS=v_dataplot1 %>% 
+    rename(value=avgDeployRate_annual) %>% 
+  filter(tempcat != "Other scenario") %>% 
+  mutate(tempcat = factor(tempcat, levels=c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario", "Likely 3.0°C scenario"), ordered=TRUE)))
+
+tmp <- compute_avgDeployRate2030250(v_data_timeTechTemp_world_plot %>% 
+                                      filter(#allcat != "No CCS/BECCS", 
+                                        tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+                                      mutate(tempcat = "Likely and Medium 2.0°C") %>%
+                                      filter(!is.na(allcat) | allcat != "NA") %>% 
+                                      mutate(allcat=paste(allcat)) %>% 
+                                      mutate(allcat = ifelse(allcat %in% c("Limited bioenergy", "No CCS/BECCS"), "Limited bioenergy and no CCS/BECCS", allcat)) %>% 
+                                      mutate(allcat = factor(allcat, levels=c("Default", "Low energy intensity", "Limited bioenergy and no CCS/BECCS", "Delayed action until 2030"), ordered=TRUE)), 
+                                    "Emissions|CO2|Carbon Capture and Storage|Biomass")  %>% 
+  rename(value=avgDeployRate_annual) %>% 
+  group_by(tempcat, allcat) %>% 
+  summarise(
+    count_mod = length(unique(model)),
+    count_scenario = length(unique(scenario)),
+    count = n()
+  ) %>% 
+  ungroup()
+v_dataplot <- compute_stats_allcat(compute_avgDeployRate2030250(v_data_timeTechTemp_world_plot %>% 
+                                                                  filter(#allcat != "No CCS/BECCS", 
+                                                                    tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+                                                                  mutate(tempcat = "Likely and Medium 2.0°C") %>% 
+                                                                  filter(!is.na(allcat) | allcat != "NA") %>% 
+                                                                  mutate(allcat=paste(allcat)) %>% 
+                                                                  mutate(allcat = ifelse(allcat %in% c("Limited bioenergy", "No CCS/BECCS"), "Limited bioenergy and no CCS/BECCS", allcat)) %>% 
+                                                                  mutate(allcat = factor(allcat, levels=c("Default", "Low energy intensity", "Limited bioenergy and no CCS/BECCS", "Delayed action until 2030"), ordered=TRUE)), 
+                                                                "Emissions|CO2|Carbon Capture and Storage|Biomass") %>% 
+                                      rename(value=avgDeployRate_annual), 
+                                   "Emissions|CO2|Carbon Capture and Storage|Biomass") %>% 
+  mutate(tempcat=factor(tempcat))
+write.csv(v_dataplot, file = "AverageRate_of_NETsDeployment2030250_allcat.csv")
+p2_p4 <- plot_cumulative_boxplots_allcat(v_dataplot, ylab="Averaged annual deployment rate of NE 2030-2050 [Mt(CO2)/yr]", ylim=c(0,700),
+                                         ADD_STATS=compute_avgDeployRate2030250(v_data_timeTechTemp_world_plot %>% 
+                                                                                  filter(#allcat != "No CCS/BECCS", 
+                                                                                    tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+                                                                                  mutate(tempcat = "Likely and Medium 2.0°C") %>% 
+                                                                                  filter(!is.na(allcat) | allcat != "NA") %>% 
+                                                                                  mutate(allcat=paste(allcat)) %>% 
+                                                                                  mutate(allcat = ifelse(allcat %in% c("Limited bioenergy", "No CCS/BECCS"), "Limited bioenergy and no CCS/BECCS", allcat)) %>% 
+                                                                                  mutate(allcat = factor(allcat, levels=c("Default", "Low energy intensity", "Limited bioenergy and no CCS/BECCS", "Delayed action until 2030"), ordered=TRUE)), 
+                                                                                "Emissions|CO2|Carbon Capture and Storage|Biomass") %>% 
+                                           rename(value=avgDeployRate_annual))
+
+```
+
+```{r emipathways2, echo=FALSE, message=FALSE, warning=FALSE, fig.height=3, fig.width=7}
+#grid.arrange(p1_p1, p1_p2, p2_p1, p2_p2, ncol=2)
+
+
+gA <- ggplotGrob(p1_p1 + guides(fill=FALSE))
+gB <- p1_p2 #ggplotGrob(p1_p2)
+gC <- ggplotGrob(p2_p1 + guides(fill=FALSE))
+gD <- p2_p2 #ggplotGrob(p2_p2)
+
+# maxHeight = grid::unit.pmax(gA$heights[2:5], gB$heights[2:5])
+# gA$heights[2:5] <- as.list(maxHeight)
+# gB$heights[2:5] <- as.list(maxHeight)
+# maxHeight = grid::unit.pmax(gC$heights[2:5], gD$heights[2:5])
+# gC$heights[2:5] <- as.list(maxHeight)
+# gD$heights[2:5] <- as.list(maxHeight)
+
+
+#grid.arrange(arrangeGrob(gA,gC), arrangeGrob(gB,gD), ncol=2)
+grid.arrange(gA,gC, ncol=2)
+
+#grid.arrange(gA,gB, gC,gD), ncol=2)
+```
+
+```{r emipathways3, echo=FALSE, message=FALSE, warning=FALSE, fig.height=4, fig.width=6}
+grid.arrange(p1_p2,p2_p2, ncol=2)
+```
+
+```{r emipathways4, echo=FALSE, message=FALSE, warning=FALSE, fig.height=4, fig.width=6}
+grid.arrange(p1_p4,p2_p4, ncol=2)
+```
+
+* The more stringent the climate target, the greater the reliance on NETs
+* The 2°C target can be met without NET (statement(s): 3)
+* NETs dramatically change emissions pathways (statement(s): 1, 2, 5)
+* NETs increase short-term emissions, and decarbonisation rates after 2050 (statement: 16)
+* NETs require rapid upscaling between 2030-2050 (statement(s): 24)
+* Limited biomass availability reduces dramatically the use of BECCS (statement 22)
+* Delayed climate action increases the need for NETs
+* The 2°C target can be achieved without negative emissions (statement(s): 3)
+
+
+## 2. Cumulative negative emissions VS short-term emission reductions
+
+The following 3 figures are (failed) attempts at making new interesting plots. The idea is to show the trade-offs between (cumulative) negative emissions, short-term emission reductions, carbon pricing ...
+But most of the points that we can make with these plots are already made with the previous figures. Perhaps we could look at: 
+ - overshooting (e.g. max temperature increase reached, diff between target and max, Period of overshoot ...)
+ - fossil fuels (e.g. how much more coal? oil? gas? ...)
+
+```{r cumnemired, echo=FALSE, message=FALSE, warning=FALSE}
+tmp <- v_data_tempTargets_world_plot %>% 
+  compute_grossCO2emiFFI() %>% 
+  add_allLevers("tempcat")
+
+ggplot(tmp %>% 
+           filter(
+               #grepl("REMIND", model),
+               !grepl("IMAGE|IMACLIM|POLES|TIAM|GCAM", model),
+               tempcat %in% c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>%
+           mutate(tempcat = ifelse(tempcat == "1.5°C scenario", "1.5°C", "2.0°C")) %>% 
+           #mutate(model = "REMIND") %>% 
+           mutate(model = paste(model)) %>% 
+           mutate(model = ifelse(grepl("REMIND", model), "REMIND", model)) %>% 
+           #mutate(model = ifelse(grepl("GCAM", model), "GCAM", model)) %>% 
+           mutate(model = ifelse(grepl("WITCH", model), "WITCH", model)) %>% 
+           mutate(model = ifelse(grepl("MESSAGE", model), "MESSAGE", model)) %>% 
+           mutate(model = ifelse(grepl("MERGE", model), "MERGE", model)) %>% 
+           mutate(log10_cp2030=log(cp2030, base = 10)) %>% 
+           mutate(log10_cp2050=log(cp2050, base = 10))) +
+    geom_point(aes(x=cumNE, y=cumNetNE*-1, color=RavgEmiRed20302050, shape=tempcat)) +
+    facet_wrap(~model, ncol=2) +
+    theme_bw() + theme(legend.position="bottom") +
+    xlab("Cumulative gross negative CO2 emissions [Gt CO2]") + ylab("Cumulative net negative CO2 emissions [Gt CO2]")
+    
+```
+
+```{r cumemi, echo=FALSE, message=FALSE, warning=FALSE}
+p <- plot_scenario_var_scatter(v_data_tempTargets_world_plot %>% 
+                                 compute_grossCO2emiFFI(), 
+                               i_x="Emissions|CO2|Fossil Fuels and Industry|Gross", i_y="Emissions|CO2|Carbon Capture and Storage|Biomass", 
+                               i_xlab="Cumulative gross positive CO2 emissions (FFI) [Gt CO2]", i_ylab="Cumulative gross negative CO2 emissions [Gt CO2]",
+                               i_factorX=1e-3, i_factorY=1e-3, i_cumX=T, i_cumY=T)
+
+p2 <- p + 
+  #geom_polygon(aes(x, y), data=data.frame(x=c(0,500,1500,0,0), y=c(0, 0, 1000, 1000, 0)), fill="#ff000033", col=NA) +
+  geom_polygon(aes(xx, yy), data=data.frame(xx=c(300,1550,300,300), yy=c(0, 1000, 1000, 0)), fill="#ff000033", col=NA) +
+  geom_polygon(aes(x, y), data=data.frame(x=c(300,1100,2100,1550,300), y=c(0, 0, 1000, 1000, 0)), fill="#00ff0033", col=NA) +
+  geom_polygon(aes(x, y), data=data.frame(x=c(1100,2200,2200,2100,1100), y=c(0, 0, 1000, 1000, 0)), fill="#0000ff33", col=NA) +
+  geom_abline(intercept = 100-(1200-1100)/(100-0)*1200, slope = (1200-1100)/(100-0), lty=2) +
+  geom_abline(intercept = 100-(1200-1100)/(100-0)*1200 + 600, slope = (100-0)/(1200-1100), lty=2, color="green") +
+  geom_abline(intercept = -(1000-0)/(1550-300)*300, slope = (1000-0)/(1550-300), lty=2) +
+  xlim(300,2200) + ylim(0,1000)
+print(p2)
+```
+
+* Reliance on negative emissions increases with climate target stringency (statement(s): 1, 2)
+* Negative emissions increases the gross positive emissions budget to achieve a climate goal (statement(s): 19)
+* The 2°C target can be achieved without negative emissions (statement(s): 3)
+
+```{r avgEmiRed_cumNE_cp2030, echo=FALSE, message=FALSE, warning=FALSE}
+tmp <- v_data_tempTargets_world_plot %>% 
+  add_allLevers("tempcat")
+
+p <- ggplot(tmp %>% 
+              filter(tempcat %in% c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+              mutate(log10_cp2030=log(cp2030, base = 10))) +
+  geom_point(aes(x=cumNE, y=avgEmiRed20302050, color=log10_cp2030)) +
+  facet_wrap(~tempcat, ncol=3) +
+  theme_bw() + 
+  xlab("Cumulative gross negative CO2 emissions [Gt CO2]") +
+  ylab("Averaged annual CO2 emissions reductions [Mt CO2/yr]") +
+  theme(legend.position = "bottom") +
+  scale_color_gradientn(name="Carbon price in 2030",
+    colours=c('black', 'darkblue', 'blue', 'orange', 'red'),
+    values   = c(-2,0,1,2,3,10),
+    breaks   = c(0,1,2,3),
+    labels   = c("1", "10", "100", "1000"),
+    rescaler = function(x,...) x,
+    oob      = identity)
+print(p)
+```
+
+* Trade-offs between short-term emissions reductions, carbon price and negative emissions:
+  + Higher carbon price required when short-term emission reductions are low and availability of NETs is limited
+  + Greater reliance on NETs allows lower carbon price in the short-term
+* 
+* Reliance on negative emissions increases with climate target stringency (statement(s): 2)
+* The 2°C target can be achieved without negative emissions (statement(s): 3)
+
+* Notes:
+  + Something looks strange in this plot
+
+* TODO:
+  + Range of historical annual emission reductions
+
+## 3. Sectoral and multi-gas aspects
+
+As it says on the tin...
+
+```{r decomposition, echo=FALSE, message=FALSE, warning=FALSE, fig.height=9, fig.width=7}
+#== PROCESS DATA ========
+tmp <- v_data_timeTechTemp_world_plot %>% 
+  filter(grepl("Emissions.CO2.*Energy Supply|Emissions.CO2.*Energy Demand.*|Emissions.CO2.Land|Emissions.CH4|Emissions.N2O|F-Gases", variable), 
+         period %in% c(2030,2050,2100),
+         tempcat %in% c("1.5°C scenario", "Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+  mutate(tempcat = paste(tempcat)) %>% 
+  mutate(tempcat = ifelse(tempcat == "1.5°C scenario", "1.5°C", "2°C")) %>% 
+  mutate(model.scenario = paste0(model,scenario)) %>% 
+  mutate(period=paste(period)) %>% 
+  mutate(value = value*1e-3) %>% 
+  mutate(value = ifelse(grepl("CH4", variable), 25*value, value)) %>% 
+  mutate(value = ifelse(grepl("N2O", variable), 298*value*1e-3, value)) %>% 
+  mutate(variable = ifelse(grepl("CH4", variable),                    "CH4", 
+                    ifelse(grepl("N2O", variable),                    "N2O", 
+                    ifelse(grepl("F-Gases", variable),                "F-Gases", 
+                    ifelse(grepl("Supply", variable),                 "CO2 - Power", 
+                    ifelse(grepl("Energy Demand.Industry", variable), "CO2 - Industry", 
+                    ifelse(grepl("Residential", variable),            "CO2 - Buildings", 
+                    ifelse(grepl("Transport", variable),              "CO2 - Transportation", 
+                    ifelse(grepl("Land", variable),                   "CO2 - Land-Use", 
+                                                                      "CO2 - Agg. demand"))))))))) %>% 
+  spread(variable, value) %>% 
+  mutate(nonCO2KG = `CH4` + `N2O` + `F-Gases`) %>% 
+  select(-`CH4`, -`N2O`, -`F-Gases`) %>%
+  mutate(`CO2 - Industry+Buildings` = `CO2 - Agg. demand`- `CO2 - Transportation`) %>% 
+  gather(variable, value, -model, -scenario, -region, -model.scenario, -period, -tempcat, -allcat, -techcat, -timingcat) %>% 
+  mutate(variable = factor(variable, levels=c("CO2 - Power", "CO2 - Agg. demand", "CO2 - Industry+Buildings", "CO2 - Industry", 
+                                              "CO2 - Buildings","CO2 - Transportation", "CO2 - Land-Use",
+                                              "nonCO2KG"), ordered=TRUE))
+
+#== PLOT DATA ========
+p_emiAll_bySec_byTemp <- ggplot(tmp %>% 
+                                  filter(!variable %in% c("CO2 - Agg. demand", "CO2 - Industry", "CO2 - Buildings"),
+                                         allcat %in% c("Default", "No CCS/BECCS")) %>% 
+                                  mutate(period=factor(period))) + 
+  geom_boxplot(aes(x=variable, y=value, fill=variable, alpha=period)) + 
+  geom_segment(aes(x=xmin, xend=xmax, y=ymin, yend=ymax), data=data.frame(variable=c("CO2 - Power", "CO2 - Industry+Buildings", 
+                                                                                     "CO2 - Transportation", "CO2 - Land-Use",
+                                                                                     "nonCO2KG"), xmin=0.5, xmax=5.5, ymin=0, ymax=0), lty=2, color="red") +
+  facet_grid(allcat ~ tempcat, scales = "free_y") + 
+  theme_bw() + 
+  theme(legend.position="bottom") +
+  #ylim(-30,40) +
+  xlab("") + ylab("Emissions [Gt CO2-eq/yr]")
+print(p_emiAll_bySec_byTemp)
+```
+
+* NETs are important to compensate for residual emissions in sectors that are difficult to decarbonise and in other non-CO2 GHGs (statement(s): 18)
+* The power sector is important for decarbonization (statement(s): 20)
+*	The transportation sector becomes also important for decarbonisation in 1.5°C (new statement)
+*	Net land-use change compensate in case of no CCS
+
+
+
+## 4. Mitigation costs
+
+No big surprise here. Perhaps this could be combined with the first figure.
+
+```{r mitigation_costs, echo=FALSE, message=FALSE, warning=FALSE, fig.height=7, fig.width=7}
+tmp3 <- data_ampere %>% 
+  filter(variable == "Policy Cost|GDP Loss", grepl("AMPERE2.*FullTech-OPT|AMPERE2.*NoCCS-OPT", scenario),
+         region == "World", period %in% seq(2010,2100,10)) %>% 
+  filter(!grepl(".*OPT-policy", scenario)) %>% 
+  separate(scenario, into=c("project","target","technology","policytiming"), sep="-") %>% 
+  select(-project,-policytiming,-unit,-region,-variable) %>% 
+  filter(target != "Base") %>% 
+  mutate(period=as.numeric(period)) %>% 
+  spread(technology, value) %>% 
+  filter(!is.na(NoCCS)) %>% 
+  gather(technology, value, -model,-target,-period) %>% 
+  group_by(model,target,technology) %>% 
+  arrange(period) %>% 
+  mutate(allinfo=paste0(period,"-",lead(period, default=2100),",",value,"#",lead(value))) %>% 
+  filter(period != 2100) %>% 
+  mutate(period=paste0(period+1,"-",lead(period, default=2100))) %>% 
+  mutate(value=sapply(allinfo, function(x) {
+    
+    info_period <- strsplit(x, ",")[[1]][1]
+    info_value  <- strsplit(x, ",")[[1]][2]
+    
+    period_start <- as.numeric(strsplit(info_period, "-")[[1]][1]) +1
+    period_end   <- as.numeric(strsplit(info_period, "-")[[1]][2])
+    
+    value_start <- as.numeric(strsplit(info_value, "#")[[1]][1])
+    value_end   <- as.numeric(strsplit(info_value, "#")[[1]][2])
+    
+    res_interp <- approx(c(period_start, period_end), c(value_start, value_end), seq(period_start,period_end,1))
+    
+    out <- sum(res_interp$y*1/(1+0.5)^(seq(period_start,period_end,1) - 2011))
+    
+    return(out)
+  })) %>% 
+  dplyr::select(-allinfo) %>% 
+  ungroup()
+
+# p1 <- ggplot(tmp3) +
+#   geom_bar(aes(x=period, y=value, fill=technology), stat="identity") +
+#   facet_grid(target~model, scales="free_y") +
+#   #scale_y_log10() +
+#   theme_bw() +
+#   theme(legend.position = "bottom")
+
+p2 <- ggplot(tmp3 %>% group_by(model,target,technology) %>% summarise(value=sum(value)) %>% ungroup()) +
+  geom_bar(aes(x=target, y=value, fill=technology), stat="identity") +
+  facet_wrap(~model, scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+#grid.arrange(p1,p2, ncol=1)
+print(p2)
+```
+
+* NETs decrease aggregated mitigation costs (statement(s): 6)
+
+
+## Carbon prices
+```{r carbonprice, echo=FALSE, message=FALSE, warning=FALSE}
+# Carbon prices (differences)
+p1 <- ggplot(v_data_timeTechTemp_world_plot %>% 
+         filter(!scenario %in% c(
+           "AMPERE2-450-FullTech-OPT-policy",
+           "AMPERE2-550-FullTech-OPT-policy",
+           "AMPERE2-450-NoCCS.-OPT-policy",
+           "AMPERE2-550-NoCCS.-OPT-policy"
+         )) %>% 
+         filter(model != "IMACLIM v1.1") %>% 
+         filter(
+           variable == "Price|Carbon",
+           grepl("AMPERE2-450-NoCCS.*|AMPERE2-450-FullTech.*|AMPERE2-550-NoCCS.*|AMPERE2-550-FullTech.*", scenario)) %>%
+         separate(scenario, into=c("mip", "target", "tech", "pol"), sep="-") %>% 
+         unite("mip.target", mip, target, sep="-") %>% 
+         select(model, mip.target, tech, pol, period, tempcat,value) %>% 
+         filter(pol == "OPT", model %in% c("REMIND 1.5", "IMACLIM v1.1", "MESSAGE V.4", "MERGE_EMF27")) %>%
+         arrange(model, mip.target, tech, period) %>% 
+         spread(tech, value) %>% 
+         mutate(value=(FullTech-NoCCS))) +
+  geom_line(aes(x=period, y=value, color=model, lty=mip.target)) +
+  ggtitle("Effect of BECCS on carbon prices (absolute)") + 
+  xlab("") + ylab("Differences in carbon price [US$]") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+# Carbon prices (relative differences)
+p2 <- ggplot(v_data_timeTechTemp_world_plot %>% 
+         filter(!scenario %in% c(
+           "AMPERE2-450-FullTech-OPT-policy",
+           "AMPERE2-550-FullTech-OPT-policy",
+           "AMPERE2-450-NoCCS.-OPT-policy",
+           "AMPERE2-550-NoCCS.-OPT-policy"
+         )) %>% 
+         filter(model != "IMACLIM v1.1") %>% 
+         filter(
+           variable == "Price|Carbon",
+           grepl("AMPERE2-450-NoCCS.*|AMPERE2-450-FullTech.*|AMPERE2-550-NoCCS.*|AMPERE2-550-FullTech.*", scenario)) %>%
+         separate(scenario, into=c("mip", "target", "tech", "pol"), sep="-") %>% 
+         unite("mip.target", mip, target, sep="-") %>% 
+         select(model, mip.target, tech, pol, period, tempcat,value) %>% 
+         filter(pol == "OPT", model %in% c("REMIND 1.5", "IMACLIM v1.1", "MESSAGE V.4", "MERGE_EMF27")) %>%
+         arrange(model, mip.target, tech, period) %>% 
+         spread(tech, value) %>% 
+         mutate(value=(FullTech-NoCCS)/NoCCS*100)) +
+  geom_line(aes(x=period, y=value, color=model, lty=mip.target)) +
+  ggtitle("Effect of BECCS on carbon prices (relative)") + 
+  xlab("") + ylab("Differences in carbon price [%]") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+grid.arrange(p1,p2, ncol = 2)
+```
+
+* NETs decrease carbon price (statement(s): 7)
+* NETs deployment requires a high carbon price (statement(s): 8)
+* In the models used here, the relative differences in carbon prices remain constant over time (Hotelling path effect)
+
+## Land-use
+```{r landuse, echo=FALSE, message=FALSE, warning=FALSE}
+tmp <- v_data5 %>% 
+  filter(variable == "Land Cover|Forest") %>% 
+  select(-scenario, -scenario.model, -unit, -variable, -tempcat) %>% 
+  spread(target, value) %>% 
+  mutate(`26` = `26` - Baseline) %>% 
+  mutate(`34` = `34` - Baseline) %>% 
+  mutate(`45` = `45` - Baseline) %>% 
+  mutate(`60` = `60` - Baseline) %>% 
+  select(-Baseline) %>% 
+  gather(target, value, -model, -ssp, -region, -period)
+
+# # Pathways
+# p <- ggplot(data=tmp %>% filter(region == "World") %>% mutate(ssp.model=paste0(ssp,".",model))) +
+#   geom_line(aes(x=period, y=value, colour=ssp)) +
+#   geom_point(aes(x=period, y=value, colour=ssp)) +
+#   facet_grid(model~target)+
+#   theme_minimal() +
+#   xlab("") + ylab("Change in AR compared to baseline [Mha]")
+# print(p)
+
+# # Scatter
+# p <- ggplot(data=tmp %>% filter(region == "World", period == 2100) %>% 
+#               mutate(group = ifelse(model %in% c("AIM/CGE", "IMAGE", "MESSAGE-GLOBIOM"), "Group 1:\nAIM/CGE,IMAGE, MESSAGE-GLOBIOM",
+#                                     ifelse(model %in% c("GCAM4"), "Group 2:\nGCAM4","Group 3:\nREMIND-MAGPIE"))) %>% 
+#               filter(group == "Group 1:\nAIM/CGE,IMAGE, MESSAGE-GLOBIOM") %>% 
+#               filter(target %in% c("26", "34")) %>% 
+#               mutate(ssp.model=paste0(ssp,".",model))) +
+#   geom_point(aes(x=target, y=value, colour=ssp, shape=model), size=3) +
+#     facet_wrap(~group,ncol=3)+
+#   theme_minimal() +
+#   xlab("") + ylab("Change in AR compared to baseline [Mha]")
+# print(p)
+
+# boxplot
+p <- ggplot(data=tmp %>% filter(region == "World", period == 2100) %>% 
+              mutate(group = ifelse(model %in% c("AIM/CGE", "IMAGE", "MESSAGE-GLOBIOM"), "Group 1:\nAIM/CGE,IMAGE, MESSAGE-GLOBIOM",
+                                    ifelse(model %in% c("GCAM4"), "Group 2:\nGCAM4","Group 3:\nREMIND-MAGPIE"))) %>% 
+              filter(group == "Group 1:\nAIM/CGE,IMAGE, MESSAGE-GLOBIOM") %>% 
+              filter(target %in% c("26", "34")) %>% 
+              mutate(ssp.model=paste0(ssp,".",model))) +
+  geom_boxplot(aes(x=target, y=value, fill=ssp)) +
+    facet_wrap(~group,ncol=3)+
+  theme_minimal() +
+  xlab("") + ylab("Change in AR compared to baseline [Mha]")
+print(p)
+
+```
+
+* The more stringent the climate target, the more land is required by AR
+
+
+## Carbon storage
+
+We are thinking of making a map out of it.
+
+```{r carbonstorage, echo=FALSE, message=FALSE, warning=FALSE}
+
+dooley_storage <- read.csv("../data/Dooley2013-fig2Digitalised2.csv", 
+                           header = TRUE, #col.names = c("region", "type", "value"), 
+                           stringsAsFactors = FALSE)
+
+dooley_storage <- dooley_storage %>% 
+  spread(region, value) %>% 
+  gather(region, value, -storage_type) %>% 
+  mutate(value=ifelse(is.na(value), 0, value)) %>% 
+  spread(region, value) %>% 
+  mutate(USA=USA+Canada) %>% 
+  select(-Canada) %>% 
+  mutate(Europe = `Western Europe`+`Eastern Europe`) %>% 
+  select(-`Western Europe`, -`Eastern Europe`) %>% 
+  rename(India=`Indian Subcontinent`) %>% 
+  rename(Other=`South Korea`) %>% 
+  gather(region, value, -storage_type) %>% 
+  mutate(value=ifelse(is.na(value), 0, value))
+
+def_regions <- data.frame(
+  region  = c("ASIA",           "Brazil",  "China", "EU",     "EU12",   "EU15",   "India", "Japan", "LAM",           "MAF",         "OECD90", "REF",                 "Russia",              "USA", "NORTH_AM", "EUROPE", "PAC_OECD", "REF_ECON",            "CHINA+", "INDIA+", "REST_ASIA",      "AFRICA", "MIDDLE_EAST", "LATIN_AM",      "REST_WORLD", "AFR",    "CHN",   "EUR",    "FSU",                 "IND",   "JPN",   "MEA",         "OAS",            "ROW",   "RUS"),
+  region2 = c("Southeast Asia", "Other",   "China", "Europe", "Europe", "Europe", "India", "Japan", "Latin America", "Middle East", "Other",  "Former Soviet Union", "Former Soviet Union", "USA", "USA",      "Europe", "Other",    "Former Soviet Union", "China",  "India",  "Southeast Asia", "Africa", "Middle East", "Latin America", "Other",      "Africa", "China", "Europe", "Former Soviet Union", "India", "Japan", "Middle East", "Southeast Asia", "Other", "Former Soviet Union"),
+  stringsAsFactors = FALSE
+)
+
+scenario_storage <- v_data_timeTechTemp_regional %>%
+  filter(variable == "Emissions|CO2|Carbon Capture and Storage|Biomass") %>%
+  inner_join(def_regions, by=c("region")) %>%
+  filter(period %in% seq(2010,2100,10)) %>%
+  filter(!tempcat %in% c("Other scenario", "Likely 3.0°C scenario")) %>%
+  mutate(tempcat = ifelse(tempcat %in% c("1.5°C scenario"), "1.5°C", "2.0°C")) %>%
+  select(-variable) %>%
+  group_by(model,scenario,region,region2,tempcat) %>%
+  mutate(dt=0.5*(lead(period, default=2100) - period) + 0.5*(period - lag(period, default=2010))) %>%
+  summarise(value=sum(value/1000*dt)) %>%
+  ungroup() %>%
+  group_by(region2,tempcat) %>%
+  summarise(
+    min=min(value, na.rm=T),
+    p05=quantile(value, 0.05, na.rm=T),
+    p15=quantile(value, 0.15, na.rm=T),
+    p25=quantile(value, 0.25, na.rm=T),
+    med=median(value, na.rm=T),
+    mean=mean(value, na.rm=T),
+    p75=quantile(value, 0.75, na.rm=T),
+    p85=quantile(value, 0.85, na.rm=T),
+    p95=quantile(value, 0.95, na.rm=T),
+    max=max(value, na.rm=T),
+    count=n()
+    ) %>%
+  ungroup()
+
+ggplot(scenario_storage) +
+  geom_boxplot(aes(x=tempcat, ymin=min, ymax=max, lower=p25, upper=p75, middle=med, fill=tempcat), stat="identity") +
+  facet_wrap(~region2, scales="free_y") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  #guides(fill=FALSE) +
+  xlab("")
+
+```
+
+## Biomass usage
+```{r biomassusage, echo=FALSE, message=FALSE, warning=FALSE}
+print("Optional")
+```
+
+## Food prices
+```{r foodprice, echo=FALSE, message=FALSE, warning=FALSE}
+print("Optional")
+```
+
+* The use of BECCS increase food prices  (statement: 12)
+* Food prices increase anyway with stringent climate mitigation (and can be even higher than cases with BECCS) because biomass-based technologies are useful for mitigation (statement: 12)
+
