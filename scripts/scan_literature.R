@@ -274,7 +274,7 @@ mips <- select(docs,MIP,TI,AU)
 nodes <- read.csv("../refs/bib_couple [nodes].csv") %>%
   rename(doi=url,Id=id) %>%
   mutate(
-    doi = gsub("http://dx.doi.org/","",doi),
+    doi = gsub("https?://(dx\\.)?doi.org/","",doi),
     Id=paste0(as.character(Id),".0")
     )
 
@@ -293,7 +293,7 @@ write.csv(node_map, "../refs/bib_couple [nodes] mapped.csv")
 nodes <- read.csv("../refs/citation [nodes].csv") %>%
   rename(doi=url,Id=id) %>%
   mutate(
-    doi = gsub("http://dx.doi.org/","",doi),
+    doi = gsub("https?://(dx\\.)?doi.org/","",doi),
     Id=paste0(as.character(Id),".0")
   )
 
