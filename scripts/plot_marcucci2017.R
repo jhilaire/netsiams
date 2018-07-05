@@ -9,6 +9,8 @@ data_marcucci2017 <- data_marcucci2017 %>%
   mutate(value=as.numeric(value)) %>% 
   mutate(technology=ifelse(scenario == "S2_66", "BECCS", "BECCS+DAC"))
 
+save(data_marcucci2017, file="data/data_marcucci2017.RData")
+
 ggplot(data_marcucci2017 %>% 
          filter(variable %in% c("Carbon Sequestration|CCS|Biomass", "Carbon Sequestration|CCS|Fossil", "Carbon Sequestration|Direct Air Capture"))) +
   geom_line(aes(period,value,color=variable, lty=scenario))

@@ -7,6 +7,7 @@ u_tick_y <- seq(-20,50,10)
 u_col_case1 <- "#3f91c5"
 u_col_case2 <- RColorBrewer::brewer.pal(10, "Set1")[5]
 
+u_2degcases <- c("Likely 2.0°C scenario", "Medium 2.0°C scenario")
 
 #svg size 976 x 320 pixels
 
@@ -149,7 +150,7 @@ u_col_case2 <- RColorBrewer::brewer.pal(10, "Set1")[5]
 data_plot <- v_data_timeTechTemp_world_plot %>% 
   filter(variable %in% c("Emissions|CO2", "Emissions|CO2|Fossil Fuels and Industry", 
                          "Emissions|CO2|Land Use", "Emissions|CO2|Carbon Capture and Storage|Biomass")) %>% 
-  filter(tempcat %in% c("Likely 2.0°C scenario", "Medium 2.0°C scenario")) %>% 
+  filter(tempcat %in% c(u_2degcases)) %>% 
   mutate(tempcat = paste(tempcat)) %>% 
   mutate(tempcat = "2°C") %>% 
   filter(allcat %in% c("Default", "Delayed action until 2030")) %>% 

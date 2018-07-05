@@ -16,7 +16,153 @@ source("functions/functions_quantitativeAnalysis.R")
 
 #### LOAD DATA #########################################
 #=== Compiled data from NETs review ====================
-load("../../bitbucket/beccs/data/dataplotAll.RData")
+load("../../bitbucket/beccs/data/dataplotAll_20180222.RData")
+
+#== Add new data =======================================
+v_data_tempTargets_world_plot <- v_data_tempTargets_world_plot %>% 
+  mutate(model    = paste(model)) %>% 
+  mutate(scenario = paste(scenario)) %>% 
+  mutate(region   = paste(region)) %>% 
+  mutate(variable = paste(variable)) %>% 
+  mutate(variable = ifelse(variable == "Emissions|CO2|Land-Use Change", "Emissions|CO2|Land Use", variable)) %>% 
+  mutate(tempcat  = paste(tempcat))
+
+# Rogelj et al 2018 already included in NETs review
+# Holz et al 2018 (1.5°C scenario)
+load("data/data_holz2018.RData")
+v_data_tempTargets_world_plot <- v_data_tempTargets_world_plot %>% 
+  rbind(
+    data_holz2018 %>% 
+      select(-unit) %>% 
+      filter(period %in% c(2005, seq(2010,2100,10))) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|AFOLU", "Emissions|CO2|Land Use", variable)) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|Energy and Industrial Processes", "Emissions|CO2|Fossil Fuels and Industry", variable)) %>% 
+      mutate(variable = ifelse(variable %in% c('Carbon Sequestration|Land Use', 
+                                               #'Carbon Sequestration|Land Use|Afforestation', 
+                                               #'Carbon Sequestration|Land Use|Biochar', 
+                                               #'Carbon Sequestration|Land Use|Soil Carbon Management', 
+                                               'Carbon Sequestration|CCS|Biomass', 
+                                               'Carbon Sequestration|Direct Air Capture', 
+                                               'Carbon Sequestration|Enhanced Weathering'), "Emissions|CO2|Carbon Capture and Storage|Biomass", variable)) %>% 
+      group_by(model,scenario,region,variable,period) %>% 
+      summarize(value=sum(value)) %>% 
+      ungroup() %>% 
+      mutate(tempcat = ifelse(scenario!="Reference", "1.5°C scenario", "Other scenario"))
+    )
+
+# van Vuuren et al 2018 (1.5°C scenario)
+load("data/data_vanVuuren2018.RData")
+v_data_tempTargets_world_plot <- v_data_tempTargets_world_plot %>% 
+  rbind(
+    data_vanVuuren2018 %>% 
+      select(-unit)  %>% 
+      filter(variable %in% c("Emissions|CO2", "Emissions|CO2|AFOLU", "Emissions|CO2|Energy and Industrial Processes", 
+                             "Carbon Sequestration|CCS|Biomass", "Carbon Sequestration|Land Use", 
+                             "Carbon Sequestration|Other")) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|AFOLU", "Emissions|CO2|Land Use", variable)) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|Energy and Industrial Processes", "Emissions|CO2|Fossil Fuels and Industry", variable)) %>% 
+      mutate(variable = ifelse(variable %in% c('Carbon Sequestration|Land Use', 
+                                               'Carbon Sequestration|CCS|Biomass', 
+                                               'Carbon Sequestration|Other'), "Emissions|CO2|Carbon Capture and Storage|Biomass", variable)) %>% 
+      group_by(model,scenario,region,variable,period) %>% 
+      summarize(value=sum(value)) %>% 
+      ungroup() %>% 
+      mutate(tempcat = "1.5°C scenario") 
+  )
+  
+# Grubler et al 2018 (1.5°C scenario)
+load("data/data_grubler2018.RData")
+v_data_tempTargets_world_plot <- v_data_tempTargets_world_plot %>% 
+  rbind(
+    data_grubler2018 %>% 
+      select(-unit)  %>% 
+      filter(variable %in% c("Emissions|CO2", "Emissions|CO2|AFOLU", "Emissions|CO2|Energy and Industrial Processes", 
+                             "Carbon Sequestration|CCS|Biomass", "Carbon Sequestration|Land Use", 
+                             "Carbon Sequestration|Other")) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|AFOLU", "Emissions|CO2|Land Use", variable)) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|Energy and Industrial Processes", "Emissions|CO2|Fossil Fuels and Industry", variable)) %>% 
+      mutate(variable = ifelse(variable %in% c('Carbon Sequestration|Land Use', 
+                                               'Carbon Sequestration|CCS|Biomass', 
+                                               'Carbon Sequestration|Other'), "Emissions|CO2|Carbon Capture and Storage|Biomass", variable)) %>% 
+      group_by(model,scenario,region,variable,period) %>% 
+      summarize(value=sum(value)) %>% 
+      ungroup() %>% 
+      mutate(tempcat = "1.5°C scenario") 
+  )
+
+# Kobler et al 2018
+#readxl::read_excel("data/ETSAP_Book_CO2_emissions_SentToJerome.xlsx")
+# Only until 2060, only energy system emissions (CO2 emissions FFI, CCS, BECCS), only 1 1.5 scenario
+
+# Marcucci et al 2018 scenarios ?
+load("data/data_marcucci2017.RData")
+v_data_tempTargets_world_plot <- v_data_tempTargets_world_plot %>% 
+  rbind(
+    data_marcucci2017 %>% 
+      select(-unit, -technology) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|Non Energy", "Emissions|CO2|Land Use", variable)) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|Energy", "Emissions|CO2|Fossil Fuels and Industry", variable)) %>% 
+      mutate(variable = ifelse(variable %in% c("Carbon Sequestration|CCS|Biomass",
+                                               "Carbon Sequestration|Direct Air Capture"), "Emissions|CO2|Carbon Capture and Storage|Biomass", variable)) %>% 
+      group_by(model, scenario, region, variable,period) %>% 
+      summarize(value=sum(value)) %>% 
+      ungroup() %>% 
+      # filter(! variable %in% c("Emissions|CO2|Energy", "Carbon Sequestration|CCS|Fossil")) %>% 
+      # rbind(
+      #   data_marcucci2017 %>% 
+      #     select(-unit) %>% 
+      #     filter(variable %in% c("Emissions|CO2|Energy", "Carbon Sequestration|CCS|Fossil")) %>% 
+      #     spread(variable, value) %>% 
+      #     mutate(`Emissions|CO2|Fossil Fuels and Industry` = `Emissions|CO2|Energy`-`Carbon Sequestration|CCS|Fossil`)
+      # ) %>% 
+      mutate(tempcat = ifelse(scenario == "DAC15_50", "1.5°C scenario", scenario)) %>% 
+      mutate(tempcat = ifelse(scenario %in% c("S2_66", "DAC2_66"), "Likely 2.0°C scenario", scenario))
+    )
+
+# Luderer et al 2018
+load("data/ADVANCE_scenarios/advance_compare_20180428-180811_proc.RData")
+v_data_tempTargets_world_plot <- v_data_tempTargets_world_plot %>% 
+  rbind(
+    v_procDataScen %>% 
+      select(-unit)  %>% 
+      mutate(model = paste(model)) %>% 
+      mutate(scenario = paste(scenario)) %>% 
+      mutate(region = paste(region)) %>% 
+      mutate(variable = paste(variable)) %>% 
+      filter(variable %in% c("Emissions|CO2", "Emissions|CO2|AFOLU", "Emissions|CO2|Energy and Industrial Processes", 
+                             "Carbon Sequestration|CCS|Biomass", "Carbon Sequestration|Land Use", 
+                             "Carbon Sequestration|Other")) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|AFOLU", "Emissions|CO2|Land Use", variable)) %>% 
+      mutate(variable = ifelse(variable=="Emissions|CO2|Energy and Industrial Processes", "Emissions|CO2|Fossil Fuels and Industry", variable)) %>% 
+      mutate(variable = ifelse(variable %in% c('Carbon Sequestration|Land Use', 
+                                               'Carbon Sequestration|CCS|Biomass', 
+                                               'Carbon Sequestration|Other'), "Emissions|CO2|Carbon Capture and Storage|Biomass", variable)) %>% 
+      group_by(model,scenario,region,variable,period) %>% 
+      summarize(value=sum(value)) %>% 
+      ungroup() %>% 
+      left_join(
+        v_procDataScen %>% 
+          filter(variable == "Diagnostics|MAGICC6|Temperature|Global Mean") %>% 
+          select(-unit)  %>% 
+          mutate(model = paste(model)) %>% 
+          mutate(scenario = paste(scenario)) %>% 
+          mutate(region = paste(region)) %>% 
+          mutate(variable = paste(variable)) %>% 
+          group_by(model, scenario) %>% 
+          summarise(
+            temp2100      = sum(ifelse(period == 2100, value, 0))) %>% 
+          mutate(tempcat = ifelse(temp2100 < 1.5, "1.5°C scenario", "Other scenario")) %>% 
+          mutate(tempcat = ifelse(temp2100 >= 1.5 & temp2100 < 2, "Likely 2°C scenario", "Other scenario")) %>% 
+          ungroup() %>% 
+          select(-temp2100),
+        by=c("model", "scenario")
+      )
+  )
+
+
+
+  
+
 #=== Rogelj et al (2015) scenarios (REMIND only) =======
 if (u_reload1p5_data) {
   #--- Load REMIND data ----------------------------------

@@ -5,7 +5,7 @@ u_tick_x <- seq(2010,2100,10)
 u_tick_y <- seq(-20,50,10)
 
 u_col_case1 <- "#3f91c5"
-u_col_case2 <- "#074594"
+  u_col_case2 <- "#074594"
 
 
 #svg size 976 x 320 pixels
@@ -225,6 +225,15 @@ if (f_grid_y) for (k in u_tick_x) lines(c(k,k), c(-25,50), col="#eeeeee")
 # )
 
 # Gross positive
+cur_case = "1.5°C"
+polygon(
+  x = c(    data_plot$period[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2")], 
+            rev(data_plot$period[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2")])),
+  y = c(    rep(0.0, length(data_plot$med[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2|Fossil Fuels and Industry|Gross")])), 
+            rev(data_plot$med[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2|Fossil Fuels and Industry|Gross")])),
+  #col=paste0(u_col_case2, "33"), border=u_col_case2, lty=3
+  col="#cdd9e966", border=u_col_case2, lty=3
+)
 cur_case = "2°C"
 polygon(
   x = c(    data_plot$period[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2")], 
@@ -234,15 +243,7 @@ polygon(
   #col=paste0(u_col_case1, "33"), border=u_col_case1, lty=3
   col="#cfdfeaff", border=u_col_case1, lty=3
 )
-cur_case = "1.5°C"
-polygon(
-  x = c(    data_plot$period[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2")], 
-            rev(data_plot$period[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2")])),
-  y = c(    rep(0.0, length(data_plot$med[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2|Fossil Fuels and Industry|Gross")])), 
-            rev(data_plot$med[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2|Fossil Fuels and Industry|Gross")])),
-  #col=paste0(u_col_case2, "33"), border=u_col_case2, lty=3
-  col="#cdd9e9ff", border=u_col_case2, lty=3
-)
+
 # Gross negative
 cur_case = "1.5°C"
 polygon(
@@ -251,7 +252,7 @@ polygon(
   y = c(    rep(0.0, length(data_plot$med[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2|Carbon Capture and Storage|Biomass")])), 
             rev(data_plot$med[which(data_plot$tempcat == cur_case & data_plot$variable == "Emissions|CO2|Carbon Capture and Storage|Biomass")])),
   #col=paste0(u_col_case2, "33"), border=u_col_case2, lty=3
-  col="#cdd9e9ff", border=u_col_case2, lty=3
+  col="#cdd9e966", border=u_col_case2, lty=3
 )
 cur_case = "2°C"
 polygon(

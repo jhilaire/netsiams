@@ -100,6 +100,13 @@ def_regions <- data.frame(
   stringsAsFactors = FALSE
 )
 
+def_regions_mapHolz2817 <- data.frame(
+  region  = c("OECD US", "G77 Brazil",    "G77 Mexico",    "G77 Other Latin America", "OECD EU27", "OECD Russia",         "Other Eastern Europe", "OECD Japan", "G77 China", "G77 India", "G77 South Africa", "G77 Other Africa", "G77 Middle East", "OECD Australia", "OECD New Zealand", "G77 Indonesia", "G77 Other Large Asia", "OECD South Korea", "G77 Small Asia"),
+  region2 = c("USA",     "Latin America", "Latin America", "Latin America",           "Europe",    "Former Soviet Union", "Former Soviet Union",  "Japan",      "China",     "India",     "Africa",           "Africa",           "Middle East",     "Pacific OECD",   "Pacific OECD",     "Southeast Asia","Southeast Asia",       "Southeast Asia",   "Southeast Asia"),
+  stringsAsFactors = FALSE
+)
+
+                                                                                  
 mprs <- readxl::read_xlsx("data/model_proj_region_selection.xlsx")
 
 scenario_storage <- v_data_timeTechTemp_regional %>% 
