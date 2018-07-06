@@ -10,10 +10,17 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r init_data, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+u_path_pars     <- "data/paragraphs.csv"
+u_path_notestat <- "data/notes_statements.csv"
+u_path_alldoc   <- "all_docs_20180529_edited_new.xlsx"
+
 #==== Initialise =============================
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(knitr)
+library(kableExtra)
+
 source("get_statement_categories.R")
 source("process_statement_review_data.R")
 
@@ -32,86 +39,58 @@ all_simple <- data_all[["all_simple"]]
 
 ## Number of statements
 ```{r compute_nb_stat, echo=FALSE, message=FALSE, warning=FALSE}
-nb_stat <- note_stats %>% 
-  filter(!duplicated(docstatement__text)) %>% 
+nb_stat <- all_simple %>% 
+  filter(!duplicated(stat)) %>% 
   summarise(count=n())
 ```
-`r nb_stat$count` statements were extracted from the scenario literature.
+A total of `r nb_stat$count` unique statements were extracted from the scenario literature.
 
 ## Number of statements by relevance
-```{r compute_nb_stat_by_cat, echo=FALSE, message=FALSE, warning=FALSE}
-nb_stat_by_cat <- note_stats %>% 
-  mutate(category1=unlist(sapply(docstatement__technology__name,
-                         function(x) {
-                           techs <- sapply(strsplit(names(unlist(cat)), ".", fixed=TRUE), function(y) y[2])
-                           out <- paste(unlist(cat))[which(substr(x,1,2) == techs)]
-                           out <- ifelse(length(out)== 0, "", out)
-                           return(out)
-                         }))) %>% 
-  mutate(category2=unlist(sapply(docstatement__technology__name,
-                         function(x) {
-                           techs <- sapply(strsplit(names(unlist(cat)), ".", fixed=TRUE), function(y) y[2])
-                           out <- names(unlist(cat))[which(substr(x,1,2) == techs)]
-                           out <- ifelse(length(out)== 0, "", out)
-                           tryCatch(
-                             out <- strsplit(out, ".", fixed=TRUE)[[1]][1],
-                             error=function(e){
-                               out <- ""
-                             }  
-                           )
-                           
-                           return(out)
-                         }))) %>%            
-  group_by(category1, category2) %>% 
-  filter(!duplicated(docstatement__text)) %>% 
+```{r compute_nb_stat_by_rel, echo=FALSE, message=FALSE, warning=FALSE}
+nb_stat_by_rel <- all_simple %>%
+  filter(!relevant %in% c(0,2), stat != "") %>% 
+  mutate(relevant=ifelse(relevant == 1, "True", ifelse(relevant == 2, "False", ifelse(relevant == 3, "Maybe", "Parsing error")))) %>% 
+  group_by(relevant) %>% 
+  filter(!duplicated(stat)) %>% 
   summarise(count=n()) %>% 
   ungroup()
 ```
 
 ```r{table1}
-kable(nb_stat_by_cat)
+kable(nb_stat_by_rel)
 ```
 
 ## Number of statements by category
 ```{r compute_nb_stat_by_cat, echo=FALSE, message=FALSE, warning=FALSE}
-nb_stat_by_cat <- note_stats %>% 
-  mutate(category1=unlist(sapply(docstatement__technology__name,
-                         function(x) {
-                           techs <- sapply(strsplit(names(unlist(cat)), ".", fixed=TRUE), function(y) y[2])
-                           out <- paste(unlist(cat))[which(substr(x,1,2) == techs)]
-                           out <- ifelse(length(out)== 0, "", out)
-                           return(out)
-                         }))) %>% 
-  mutate(category2=unlist(sapply(docstatement__technology__name,
-                         function(x) {
-                           techs <- sapply(strsplit(names(unlist(cat)), ".", fixed=TRUE), function(y) y[2])
-                           out <- names(unlist(cat))[which(substr(x,1,2) == techs)]
-                           out <- ifelse(length(out)== 0, "", out)
-                           tryCatch(
-                             out <- strsplit(out, ".", fixed=TRUE)[[1]][1],
-                             error=function(e){
-                               out <- ""
-                             }  
-                           )
-                           
-                           return(out)
-                         }))) %>%            
-  group_by(category1, category2) %>% 
-  filter(!duplicated(docstatement__text)) %>% 
+nb_stat_by_cat <- all_simple %>%
+  filter(!relevant %in% c(0,2), stat != "") %>% 
+  group_by(tech) %>% 
+  filter(!duplicated(stat)) %>% 
   summarise(count=n()) %>% 
   ungroup()
 ```
 
-```r{table1}
+```r{table2}
 kable(nb_stat_by_cat)
 ```
 
-
-
 ## Number of statements by category over time
-
-
-
-```{r cars}
-summary(cars)
+```{r compute_nb_stat_by_cat_and_yr, echo=FALSE, message=FALSE, warning=FALSE}
+nb_stat_by_cat_and_yr <- all_simple %>% 
+  filter(!relevant %in% c(0,2), stat != "") %>%
+  mutate(c1c2=paste0(c2,"-",c1)) %>% 
+  group_by(c1c2, py) %>% 
+  filter(!duplicated(stat)) %>% 
+  summarise(count=n()) %>% 
+  ungroup()
 ```
+
+```r{Figure1}
+ggplot(nb_stat_by_cat_and_yr) +
+  geom_line(aes(py, count)) + 
+  facet_wrap(~c1c2, scale="free_y") +
+  xlim(2000, 2020) +
+  theme_bw()
+```
+
+

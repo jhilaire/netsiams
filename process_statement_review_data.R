@@ -27,7 +27,7 @@ process_statement_review_data <- function(i_fpath_par, i_fpath_notestat, i_fpath
   note_stats <- note_stats %>% 
     select(-X, -note__user__username) %>% 
     rename(parid=id) %>% 
-    rename(note=note_text) %>% 
+    rename(note=note__text) %>% 
     rename(statid=docstatement__id) %>% 
     rename(stat=docstatement__text) %>% 
     rename(tech=docstatement__technology__name)

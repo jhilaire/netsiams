@@ -23,6 +23,7 @@ all_simple <- data_all[["all_simple"]]
 
 
 #==== Analyse data ===========================
+#---- Basic statistics -----------------------
 # Compute total number of unique statements
 nb_stat <- note_stats %>% 
   filter(!duplicated(stat)) %>% 
@@ -30,7 +31,7 @@ nb_stat <- note_stats %>%
 
 # Compute number of statements by paragraph relevance
 nb_stat_by_rel <- all_simple %>%
-  filter(relevant != 0) %>% 
+  filter(!relevant %in% c(0,2), stat != "") %>% 
   mutate(relevant=ifelse(relevant == 1, "True", ifelse(relevant == 2, "False", ifelse(relevant == 3, "Maybe", "Parsing error")))) %>% 
   group_by(relevant) %>% 
   filter(!duplicated(stat)) %>% 
@@ -38,31 +39,36 @@ nb_stat_by_rel <- all_simple %>%
   ungroup()
 
 # Compute number of statement by category
-nb_stat_by_cat <- note_stats %>% 
-  group_by(docstatement__technology__name) %>% 
-  filter(!duplicated(docstatement__text)) %>% 
+nb_stat_by_cat <- all_simple %>%
+  filter(!relevant %in% c(0,2), stat != "") %>% 
+  group_by(tech) %>% 
+  filter(!duplicated(stat)) %>% 
   summarise(count=n()) %>% 
   ungroup()
 
-#
-nb_stat_by_cat_and_yr <- all %>% 
-  group_by(docstatement__technology__name, doc__PY) %>% 
-  filter(!duplicated(docstatement__text)) %>% 
+# Compute number of statement by category and year
+nb_stat_by_cat_and_yr <- all_simple %>% 
+  filter(!relevant %in% c(0,2), stat != "") %>%
+  mutate(c1c2=paste0(c2,"-",c1)) %>% 
+  group_by(c1c2, py) %>% 
+  filter(!duplicated(stat)) %>% 
   summarise(count=n()) %>% 
   ungroup()
 
 ggplot(nb_stat_by_cat_and_yr) +
-  geom_line(aes(doc__PY, count)) + 
-  facet_wrap(~docstatement__technology__name, scale="free_y") +
-  xlim(2000, 2020)
+  geom_line(aes(py, count)) + 
+  facet_wrap(~c1c2, scale="free_y") +
+  xlim(2000, 2020) +
+  theme_bw()
 
+#---- Analysis of statements by category ----------------------
 # Find all statements where D1_Dynamics is selected
-ns_docs <- note_stats %>% 
+all_simple %>% 
+  filter(!relevant %in% c(0,2), stat != "") %>%
   dplyr::filter(
-    grepl("D1", docstatement__technology__name),
-    !duplicated(docstatement__text)) %>% 
-  dplyr::left_join(pars, by =c("id")) %>% 
-  tidyr::spread(``)
+    grepl("D1", tech),
+    !duplicated(stat)) %>% 
+  openxlsx::write.xlsx(file="test_D1.xlsx")
 
 View(ns_d1)
 
