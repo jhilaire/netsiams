@@ -13,27 +13,32 @@ process_statement_review_data <- function(i_fpath_par, i_fpath_notestat, i_fpath
     mutate(doc__authors = ifelse(doc__authors == "", unlist(sapply(doc__title, function(x) {
       sd <- stringdist::stringdist(x,alldocs$TI, method="jaccard", q=2)
       out <- alldocs$AU[which(sd == min(sd, na.rm=TRUE)[1])]
-    })), doc__authors))
-  
-  # Remove row id column in note_stats
-  note_stats <- note_stats %>% select(-X)
-  
-  # Merge data 
-  all <- note_stats %>% 
-    left_join(pars, by=c("id")) %>% 
-    rename(AU=doc__authors) %>% 
-    rename(PY=doc__PY) %>% 
-    rename(TI=doc__title) %>% 
+    })), doc__authors)) %>% 
+    rename(docid=doc__id) %>% 
+    rename(au=doc__authors) %>% 
+    rename(ti=doc__title) %>% 
+    rename(py=doc__PY) %>% 
+    rename(parid=id) %>% 
     rename(par=text) %>% 
-    rename(stat=docstatement__text) %>% 
-    rename(note=note__text) %>% 
-    rename(tech=docstatement__technology__name) %>% 
     rename(user=docownership__user__username) %>% 
     rename(relevant=docownership__relevant)
   
+  # Remove row id column in note_stats
+  note_stats <- note_stats %>% 
+    select(-X, -note__user__username) %>% 
+    rename(parid=id) %>% 
+    rename(note=note_text) %>% 
+    rename(statid=docstatement__id) %>% 
+    rename(stat=docstatement__text) %>% 
+    rename(tech=docstatement__technology__name)
+  
+  # Merge data 
+  all <- note_stats %>% 
+    left_join(pars, by=c("parid"))
+  
   # Simplify table
   all_simple <- all %>% 
-    select(AU,PY,TI,par,stat,note,tech,user,relevant) %>% 
+    select(au,py,ti,par,note,stat,tech,user,relevant) %>% 
     mutate(c1=unlist(sapply(tech,
                             function(x) {
                               techs <- sapply(strsplit(names(unlist(cat)), ".", fixed=TRUE), function(y) y[2])

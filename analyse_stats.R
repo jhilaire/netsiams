@@ -23,15 +23,17 @@ all_simple <- data_all[["all_simple"]]
 
 
 #==== Analyse data ===========================
-# Compute total number of statements
+# Compute total number of unique statements
 nb_stat <- note_stats %>% 
-  filter(!duplicated(docstatement__text)) %>% 
+  filter(!duplicated(stat)) %>% 
   summarise(count=n())
 
 # Compute number of statements by paragraph relevance
-nb_stat_by_rel <- all %>% 
-  group_by(docownership__relevant) %>% 
-  filter(!duplicated(docstatement__text)) %>% 
+nb_stat_by_rel <- all_simple %>%
+  filter(relevant != 0) %>% 
+  mutate(relevant=ifelse(relevant == 1, "True", ifelse(relevant == 2, "False", ifelse(relevant == 3, "Maybe", "Parsing error")))) %>% 
+  group_by(relevant) %>% 
+  filter(!duplicated(stat)) %>% 
   summarise(count=n()) %>% 
   ungroup()
 
